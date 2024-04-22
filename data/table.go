@@ -27,14 +27,14 @@ func NewTable(primaryKey string) *Table {
 	}
 }
 
-func (t *Table) Select(key string) (Record, error) {
+func (t *Table) SelectAll() []Record {
 	t.RLock()
 	defer t.RUnlock()
-	record, exists := t.Rows[key]
-	if !exists {
-		return nil, fmt.Errorf("Record with key %s not found", key)
+	allRecords := make([]Record, 0, len(t.Rows))
+	for _, record := range t.Rows {
+		allRecords = append(allRecords, record)
 	}
-	return record, nil
+	return allRecords
 }
 
 func (t *Table) Insert(record Record) error {

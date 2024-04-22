@@ -23,65 +23,87 @@ func NewDatabase() *Database {
 	}
 }
 
+func (db *Database) CreateTable(tableName, primaryKey string) error {
+	db.Lock()
+	defer db.Unlock()
+	if _, exists := db.Tables[tableName]; exists {
+		return fmt.Errorf("table %s already exists", tableName)
+	}
+	db.Tables[tableName] = NewTable(primaryKey)
+	return nil
+}
+
 func (db *Database) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		switch r.URL.Path {
-		case "/listTables":
-			db.ListTables(w)
-		default:
-			http.Error(w, "Not Found", http.StatusNotFound)
-		}
-	} else if r.Method == "POST" {
+	if r.Method == "POST" && r.URL.Path == "/createTable" {
 		decoder := json.NewDecoder(r.Body)
 		var data struct {
-			Action    string
-			TableName string
-			Record    Record
-			Key       string
-			Updates   Record
+			TableName  string `json:"TableName"`
+			PrimaryKey string `json:"PrimaryKey"`
 		}
 		if err := decoder.Decode(&data); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		db.RLock()
-		table, exists := db.Tables[data.TableName]
-		db.RUnlock()
-		if !exists {
-			db.Lock()
-			if _, exists := db.Tables[data.TableName]; !exists {
-				db.Tables[data.TableName] = NewTable(data.TableName)
-			}
-			table = db.Tables[data.TableName]
-			db.Unlock()
-		}
-		switch data.Action {
-		case "insert":
-			err := table.Insert(data.Record)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-		case "update":
-			err := table.Update(data.Key, data.Updates)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-		case "delete":
-			err := table.Delete(data.Key)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-		default:
-			http.Error(w, "Invalid action", http.StatusBadRequest)
+		if err := db.CreateTable(data.TableName, data.PrimaryKey); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		fmt.Fprintln(w, "Operation successful")
-	} else {
-		http.Error(w, "Unsupported method", http.StatusMethodNotAllowed)
+		fmt.Fprintf(w, "Table '%s' created successfully", data.TableName)
+		return
 	}
+	decoder := json.NewDecoder(r.Body)
+	var data struct {
+		Action    string
+		TableName string
+		Record    Record
+		Key       string
+		Updates   Record
+	}
+	if err := decoder.Decode(&data); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	db.RLock()
+	table, exists := db.Tables[data.TableName]
+	db.RUnlock()
+
+	if !exists {
+		http.Error(w, "Table not found", http.StatusNotFound)
+		return
+	}
+
+	switch data.Action {
+	case "insert":
+		err := table.Insert(data.Record)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	case "selectAll":
+		records := table.SelectAll()
+		err := json.NewEncoder(w).Encode(records)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	case "update":
+		err := table.Update(data.Key, data.Updates)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	case "delete":
+		err := table.Delete(data.Key)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	default:
+		http.Error(w, "Invalid action", http.StatusBadRequest)
+		return
+	}
+	fmt.Fprintln(w, "Operation successful")
 }
 
 func (db *Database) ListTables(w http.ResponseWriter) {

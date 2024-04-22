@@ -26,9 +26,9 @@ func main() {
 		server.ServeHTTP(w, r)
 	})
 
-	http.HandleFunc("/listTables", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+	http.HandleFunc("/createTable", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		dbName := r.URL.Query().Get("dbName")
@@ -37,13 +37,24 @@ func main() {
 			return
 		}
 		if db, exists := server.Databases[dbName]; exists {
-			db.ListTables(w)
+			db.ServeHTTP(w, r)
 		} else {
 			http.Error(w, "Database not found", http.StatusNotFound)
 		}
 	})
 
-	http.HandleFunc("/", server.ServeHTTP)
+	http.HandleFunc("/tableAction", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		dbName := r.URL.Query().Get("dbName")
+		if db, exists := server.Databases[dbName]; exists {
+			db.ServeHTTP(w, r)
+		} else {
+			http.Error(w, "Database not found", http.StatusNotFound)
+		}
+	})
 
 	log.Println("Server starting on port 8080...")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
