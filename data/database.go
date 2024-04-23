@@ -43,67 +43,6 @@ func (db *Database) CreateTable(tableName, primaryKey string) error {
 	return nil
 }
 
-func (db *Database) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	decoder := json.NewDecoder(r.Body)
-	var data struct {
-		Action    string
-		TableName string
-		Record    Record
-		Key       string
-		Updates   Record
-	}
-	if err := decoder.Decode(&data); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	db.RLock()
-	table, exists := db.Tables[data.TableName]
-	db.RUnlock()
-
-	if !exists {
-		http.Error(w, "Table not found", http.StatusNotFound)
-		return
-	}
-
-	switch data.Action {
-	case "insert":
-		err := table.Insert(data.Record)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	case "selectAll":
-
-		records, err := table.SelectAll()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		err = json.NewEncoder(w).Encode(records)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	case "update":
-		err := table.Update(data.Key, data.Updates)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	case "delete":
-		err := table.Delete(data.Key)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	default:
-		http.Error(w, "Invalid action", http.StatusBadRequest)
-		return
-	}
-	fmt.Fprintln(w, "Operation successful")
-}
-
 func (db *Database) ListTables(w http.ResponseWriter) {
 	db.RLock()
 	defer db.RUnlock()

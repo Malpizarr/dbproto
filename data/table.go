@@ -1,9 +1,6 @@
 package data
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -11,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/Malpizarr/dbproto/dbdata"
+	"github.com/Malpizarr/dbproto/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -27,7 +25,7 @@ type Table struct {
 	sync.RWMutex
 	FilePath   string
 	PrimaryKey string
-	aesKey     []byte
+	utils      *utils.Utils
 }
 
 func NewTable(primaryKey, filePath string) *Table {
@@ -38,15 +36,11 @@ func NewTable(primaryKey, filePath string) *Table {
 		}
 	}
 	log.Printf("Creating table with file path: %s", filePath)
-	aesKey := []byte(os.Getenv("AES_KEY"))
-	if len(aesKey) != 32 {
-		log.Fatalf("Invalid AES key length: %d bytes; expected 32 bytes", len(aesKey))
-	}
 
 	table := &Table{
 		FilePath:   filePath,
 		PrimaryKey: primaryKey,
-		aesKey:     []byte(os.Getenv("AES_KEY")),
+		utils:      utils.NewUtils(),
 	}
 
 	if err := table.initializeFileIfNotExists(); err != nil {
@@ -68,34 +62,6 @@ func (t *Table) initializeFileIfNotExists() error {
 		}
 	}
 	return nil
-}
-
-func (t *Table) encrypt(data []byte) (string, error) {
-	block, err := aes.NewCipher(t.aesKey)
-	if err != nil {
-		return "", err
-	}
-	cipherText := make([]byte, aes.BlockSize+len(data))
-	iv := cipherText[:aes.BlockSize]
-	stream := cipher.NewCTR(block, iv)
-	stream.XORKeyStream(cipherText[aes.BlockSize:], data)
-	return base64.StdEncoding.EncodeToString(cipherText), nil
-}
-
-func (t *Table) decrypt(data string) ([]byte, error) {
-	cipherText, err := base64.StdEncoding.DecodeString(data)
-	if err != nil {
-		return nil, err
-	}
-	block, err := aes.NewCipher(t.aesKey)
-	if err != nil {
-		return nil, err
-	}
-	plainText := make([]byte, len(cipherText)-aes.BlockSize)
-	iv := cipherText[:aes.BlockSize]
-	stream := cipher.NewCTR(block, iv)
-	stream.XORKeyStream(plainText, cipherText[aes.BlockSize:])
-	return plainText, nil
 }
 
 func (t *Table) Insert(record Record) error {
@@ -179,18 +145,16 @@ func (t *Table) readRecordsFromFile() (*dbdata.Records, error) {
 	encryptedData, err := os.ReadFile(t.FilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// If the file doesn't exist, return an empty Records object
 			return &dbdata.Records{Records: make(map[string]*dbdata.Record)}, nil
 		}
 		return nil, fmt.Errorf("failed to read file: %v", err)
 	}
 
 	if len(encryptedData) == 0 {
-		// If the file is empty, return an empty Records object
 		return &dbdata.Records{Records: make(map[string]*dbdata.Record)}, nil
 	}
 
-	decryptedData, err := t.decrypt(string(encryptedData))
+	decryptedData, err := t.utils.Decrypt(string(encryptedData))
 	if err != nil {
 		return nil, fmt.Errorf("decryption failed: %v", err)
 	}
@@ -208,7 +172,7 @@ func (t *Table) writeRecordsToFile(records *dbdata.Records) error {
 	if err != nil {
 		return fmt.Errorf("error marshaling records: %v", err)
 	}
-	encryptedData, err := t.encrypt(data)
+	encryptedData, err := t.utils.Encrypt(data)
 	if err != nil {
 		return fmt.Errorf("error encrypting data: %v", err)
 	}
