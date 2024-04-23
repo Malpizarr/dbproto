@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 )
 
@@ -14,11 +15,13 @@ type DatabaseReader interface {
 
 type Database struct {
 	sync.RWMutex
+	Name   string
 	Tables map[string]*Table
 }
 
-func NewDatabase() *Database {
+func NewDatabase(name string) *Database {
 	return &Database{
+		Name:   name,
 		Tables: make(map[string]*Table),
 	}
 }
@@ -29,28 +32,18 @@ func (db *Database) CreateTable(tableName, primaryKey string) error {
 	if _, exists := db.Tables[tableName]; exists {
 		return fmt.Errorf("table %s already exists", tableName)
 	}
-	db.Tables[tableName] = NewTable(primaryKey)
+	filePath := fmt.Sprintf("./%s/%s.dat", db.Name, tableName)
+	table := NewTable(primaryKey, filePath)
+	db.Tables[tableName] = table
+
+	if _, err := os.Create(filePath); err != nil {
+		return fmt.Errorf("failed to create initial file for table '%s': %v", tableName, err)
+	}
+
 	return nil
 }
 
 func (db *Database) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" && r.URL.Path == "/createTable" {
-		decoder := json.NewDecoder(r.Body)
-		var data struct {
-			TableName  string `json:"TableName"`
-			PrimaryKey string `json:"PrimaryKey"`
-		}
-		if err := decoder.Decode(&data); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := db.CreateTable(data.TableName, data.PrimaryKey); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		fmt.Fprintf(w, "Table '%s' created successfully", data.TableName)
-		return
-	}
 	decoder := json.NewDecoder(r.Body)
 	var data struct {
 		Action    string
@@ -81,8 +74,13 @@ func (db *Database) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "selectAll":
-		records := table.SelectAll()
-		err := json.NewEncoder(w).Encode(records)
+
+		records, err := table.SelectAll()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		err = json.NewEncoder(w).Encode(records)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

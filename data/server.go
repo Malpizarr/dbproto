@@ -24,7 +24,7 @@ func (s *Server) CreateDatabase(name string) error {
 	if _, exists := s.Databases[name]; exists {
 		return fmt.Errorf("Database %s already exists", name)
 	}
-	s.Databases[name] = NewDatabase()
+	s.Databases[name] = NewDatabase(name)
 	return nil
 }
 
