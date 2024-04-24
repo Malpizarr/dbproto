@@ -1,4 +1,4 @@
-Overview
+## Overview
 
 The dbproto project is a Go application that provides a simple server and utilities for database operations, including table creation, data encryption/decryption, and basic CRUD operations on records. It leverages environment variables for configuration, Protobuf for data serialization, and integrates AES for security.
 Getting Started
@@ -12,21 +12,15 @@ Prerequisites
 
 Installation
 
-    Clone the repository:
+Clone the repository:
 
-    bash
-
-git clone https://github.com/Malpizarr/dbproto.git
+    git clone https://github.com/Malpizarr/dbproto.git
 
 Navigate to the project directory:
 
-bash
-
-cd dbproto
+    cd dbproto
 
 Install dependencies:
-
-bash
 
     go get .
 
@@ -40,17 +34,13 @@ Building the Project
 
 Compile the project using:
 
-bash
-
-go build
+    go build
 
 Running the Server
 
 Start the server by executing the compiled binary:
 
-bash
-
-./dbproto
+    ./dbproto
 
 This starts the server on localhost:8080. The server logs will indicate that it is running and listening for requests.
 API Overview
