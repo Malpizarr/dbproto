@@ -20,12 +20,12 @@ type TableReader interface {
 	Update(key string, record Record) error
 	Delete(key string) error
 }
-
 type Table struct {
 	sync.RWMutex
 	FilePath   string
 	PrimaryKey string
 	utils      *utils.Utils
+	Indexes    map[string]map[string]*dbdata.Record
 }
 
 func NewTable(primaryKey, filePath string) *Table {
@@ -36,20 +36,36 @@ func NewTable(primaryKey, filePath string) *Table {
 		}
 	}
 	log.Printf("Creating table with file path: %s", filePath)
-
 	table := &Table{
 		FilePath:   filePath,
 		PrimaryKey: primaryKey,
 		utils:      utils.NewUtils(),
+		Indexes:    make(map[string]map[string]*dbdata.Record),
 	}
-
 	if err := table.initializeFileIfNotExists(); err != nil {
 		log.Fatalf("Failed to initialize file %s: %v", filePath, err)
 	} else {
 		log.Printf("File %s initialized successfully.", filePath)
 	}
-
+	table.LoadIndexes()
 	return table
+}
+
+func (t *Table) LoadIndexes() error {
+	records, err := t.readRecordsFromFile()
+	if err != nil {
+		return err
+	}
+
+	for _, record := range records.GetRecords() {
+		for key, value := range record.Fields {
+			if _, exists := t.Indexes[key]; !exists {
+				t.Indexes[key] = make(map[string]*dbdata.Record)
+			}
+			t.Indexes[key][value] = record
+		}
+	}
+	return nil
 }
 
 func (t *Table) initializeFileIfNotExists() error {
@@ -68,27 +84,31 @@ func (t *Table) Insert(record Record) error {
 	t.Lock()
 	defer t.Unlock()
 
-	protoRecords, err := t.readRecordsFromFile()
+	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
 		return err
 	}
 
-	key := fmt.Sprintf("%v", record[t.PrimaryKey])
-	if _, exists := protoRecords.GetRecords()[key]; exists {
-		return fmt.Errorf("Record with key %s already exists", key)
+	protoRecord := &dbdata.Record{Fields: make(map[string]string)}
+	primaryKeyValue := fmt.Sprintf("%v", record[t.PrimaryKey])
+	if _, exists := allRecords.Records[primaryKeyValue]; exists {
+		return fmt.Errorf("Record with primary key %s already exists", primaryKeyValue)
 	}
-
-	newProtoRecord := &dbdata.Record{Fields: make(map[string]string)}
-	for k, v := range record {
-		strVal, ok := v.(string)
+	for key, value := range record {
+		val, ok := value.(string)
 		if !ok {
-			return fmt.Errorf("non-string value found for key %s: value %v", k, v)
+			return fmt.Errorf("invalid value type for field %s: %v", key, value)
 		}
-		newProtoRecord.Fields[k] = strVal
+		protoRecord.Fields[key] = val
+		if _, exists := t.Indexes[key]; !exists {
+			t.Indexes[key] = make(map[string]*dbdata.Record)
+		}
+		t.Indexes[key][val] = protoRecord
 	}
 
-	protoRecords.GetRecords()[key] = newProtoRecord
-	return t.writeRecordsToFile(protoRecords)
+	allRecords.Records[primaryKeyValue] = protoRecord
+
+	return t.writeRecordsToFile(allRecords)
 }
 
 func (t *Table) SelectAll() ([]*dbdata.Record, error) {
@@ -108,37 +128,59 @@ func (t *Table) SelectAll() ([]*dbdata.Record, error) {
 func (t *Table) Update(key string, updates Record) error {
 	t.Lock()
 	defer t.Unlock()
-	protoRecords, err := t.readRecordsFromFile()
+
+	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
 		return err
 	}
-	record, exists := protoRecords.GetRecords()[key]
+	existingRecord, exists := allRecords.Records[key]
 	if !exists {
 		return fmt.Errorf("Record with key %s not found", key)
 	}
 
-	for field, value := range updates {
-		strVal, ok := value.(string)
+	for field, newValue := range updates {
+		oldVal, ok := existingRecord.Fields[field]
+		if ok {
+			if idxMap, found := t.Indexes[field]; found {
+				delete(idxMap, oldVal)
+			}
+		}
+		newValStr, ok := newValue.(string)
 		if !ok {
 			return fmt.Errorf("non-string value for field %s", field)
 		}
-		record.Fields[field] = strVal
+		existingRecord.Fields[field] = newValStr
+		if _, exists := t.Indexes[field]; !exists {
+			t.Indexes[field] = make(map[string]*dbdata.Record)
+		}
+		t.Indexes[field][newValStr] = existingRecord
 	}
-	return t.writeRecordsToFile(protoRecords)
+
+	return t.writeRecordsToFile(allRecords)
 }
 
 func (t *Table) Delete(key string) error {
 	t.Lock()
 	defer t.Unlock()
-	records, err := t.readRecordsFromFile()
+
+	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
 		return err
 	}
-	if _, exists := records.GetRecords()[key]; !exists {
+	record, exists := allRecords.Records[key]
+	if !exists {
 		return fmt.Errorf("Record with key %s not found", key)
 	}
-	delete(records.GetRecords(), key)
-	return t.writeRecordsToFile(records)
+
+	for field, value := range record.Fields {
+		if idxMap, found := t.Indexes[field]; found {
+			delete(idxMap, value)
+		}
+	}
+
+	delete(allRecords.Records, key)
+
+	return t.writeRecordsToFile(allRecords)
 }
 
 func (t *Table) readRecordsFromFile() (*dbdata.Records, error) {
