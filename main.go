@@ -4,10 +4,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/Malpizarr/dbproto/data"
-
 	"github.com/Malpizarr/dbproto/api"
-
+	"github.com/Malpizarr/dbproto/data"
 	"github.com/joho/godotenv"
 )
 
@@ -17,6 +15,11 @@ func main() {
 	}
 
 	server := data.NewServer()
+
+	if err := server.Initialize(); err != nil {
+		log.Fatalf("Failed to initialize server: %v", err)
+	}
+
 	api.SetupRoutes(server)
 
 	log.Println("Server starting on port 8080...")

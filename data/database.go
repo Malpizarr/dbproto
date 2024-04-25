@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -32,7 +34,15 @@ func (db *Database) CreateTable(tableName, primaryKey string) error {
 	if _, exists := db.Tables[tableName]; exists {
 		return fmt.Errorf("table %s already exists", tableName)
 	}
-	filePath := fmt.Sprintf("./%s/%s.dat", db.Name, tableName)
+
+	serverDir := getDefaultServerDir()
+	dbDir := filepath.Join(serverDir, db.Name)
+	filePath := filepath.Join(dbDir, tableName+".dat")
+
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return fmt.Errorf("failed to create database directory: %v", err)
+	}
+
 	table := NewTable(primaryKey, filePath)
 	db.Tables[tableName] = table
 
@@ -40,6 +50,29 @@ func (db *Database) CreateTable(tableName, primaryKey string) error {
 		return fmt.Errorf("failed to create initial file for table '%s': %v", tableName, err)
 	}
 
+	return nil
+}
+
+func (db *Database) LoadTables(dbDir string) error {
+	files, err := os.ReadDir(dbDir)
+	if err != nil {
+		return fmt.Errorf("failed to read database directory: %v", err)
+	}
+
+	for _, fileInfo := range files {
+		if !fileInfo.IsDir() && strings.HasSuffix(fileInfo.Name(), ".dat") {
+			tableName := strings.TrimSuffix(fileInfo.Name(), ".dat")
+			tablePath := filepath.Join(dbDir, fileInfo.Name())
+			table := NewTable("", tablePath)
+			records, err := table.readRecordsFromFile()
+			if err != nil {
+				return fmt.Errorf("failed to load table %s: %v", tableName, err)
+			}
+
+			table.Records = records.Records
+			db.Tables[tableName] = table
+		}
+	}
 	return nil
 }
 

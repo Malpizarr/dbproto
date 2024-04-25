@@ -9,6 +9,7 @@ import (
 
 	"github.com/Malpizarr/dbproto/dbdata"
 	"github.com/Malpizarr/dbproto/utils"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -20,12 +21,14 @@ type TableReader interface {
 	Update(key string, record Record) error
 	Delete(key string) error
 }
+
 type Table struct {
 	sync.RWMutex
 	FilePath   string
 	PrimaryKey string
 	utils      *utils.Utils
 	Indexes    map[string]map[string]*dbdata.Record
+	Records    map[string]*dbdata.Record
 }
 
 func NewTable(primaryKey, filePath string) *Table {

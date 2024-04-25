@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -16,6 +18,38 @@ func NewServer() *Server {
 	return &Server{
 		Databases: make(map[string]*Database),
 	}
+}
+
+func (s *Server) Initialize() error {
+	serverDir := getDefaultServerDir()
+	if err := os.MkdirAll(serverDir, 0755); err != nil {
+		return fmt.Errorf("failed to create or access server directory: %v", err)
+	}
+
+	return s.LoadDatabases(serverDir)
+}
+
+func (s *Server) LoadDatabases(serverDir string) error {
+	dbs, err := os.ReadDir(serverDir)
+	if err != nil {
+		return fmt.Errorf("failed to read server directory: %v", err)
+	}
+
+	for _, dbInfo := range dbs {
+		if dbInfo.IsDir() {
+			dbDir := filepath.Join(serverDir, dbInfo.Name())
+			db := NewDatabase(dbInfo.Name())
+			if err := db.LoadTables(dbDir); err != nil {
+				return err
+			}
+			s.Databases[dbInfo.Name()] = db
+		}
+	}
+	return nil
+}
+
+func getDefaultServerDir() string {
+	return "./databaseprototype"
 }
 
 func (s *Server) CreateDatabase(name string) error {
