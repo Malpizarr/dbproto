@@ -11,4 +11,5 @@ func SetupRoutes(server *data.Server) {
 	http.HandleFunc("/createTable", CreateTableHandler(server))
 	http.HandleFunc("/listDatabases", ListDatabasesHandler(server))
 	http.HandleFunc("/tableAction", TableActionHandler(server))
+	http.HandleFunc("/joinTables", JoinTablesHandler(server))
 }
