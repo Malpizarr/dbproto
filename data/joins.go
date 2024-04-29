@@ -16,43 +16,39 @@ const (
 )
 
 func JoinTables(t1, t2 *Table, key1, key2 string, joinType JoinType) ([]map[string]interface{}, error) {
-	var results []map[string]interface{}
+	results := make([]map[string]interface{}, 0)
 
-	if err := t1.LoadIndexes(); err != nil {
-		return nil, err
+	if err := t1.ResetAndLoadIndexes(); err != nil {
+		return nil, fmt.Errorf("failed to load indexes for table 1: %v", err)
 	}
-	if err := t2.LoadIndexes(); err != nil {
-		return nil, err
-	}
-
-	index1, ok1 := t1.Indexes[key1]
-	index2, ok2 := t2.Indexes[key2]
-
-	if !ok1 || !ok2 {
-		return nil, fmt.Errorf("one of the keys %s or %s does not have an index", key1, key2)
+	if err := t2.ResetAndLoadIndexes(); err != nil {
+		return nil, fmt.Errorf("failed to load indexes for table 2: %v", err)
 	}
 
-	keysInLeft := make(map[string]bool)
-	keysInRight := make(map[string]bool)
+	for _, rec1 := range t1.Indexes[key1] {
+		if rec1 == nil {
+			continue
+		}
 
-	for key, rec1 := range index1 {
-		keysInLeft[key] = true
-		if rec2, exists := index2[key]; exists {
-			result := mergeRecords(rec1, rec2)
-			results = append(results, result)
-			keysInRight[key] = true
-		} else if joinType == LeftJoin || joinType == FullOuterJoin {
-			result := mergeRecords(rec1, nil)
-			results = append(results, result)
+		for _, rec2 := range t2.Indexes[key2] {
+			if rec2 != nil {
+				results = append(results, mergeRecords(rec1, rec2))
+			}
+		}
+
+		if len(t2.Indexes[key2]) == 0 && (joinType == LeftJoin || joinType == FullOuterJoin) {
+			results = append(results, mergeRecords(rec1, nil))
 		}
 	}
 
 	if joinType == RightJoin || joinType == FullOuterJoin {
-		for key, rec2 := range index2 {
-			if !keysInLeft[key] {
-				result := mergeRecords(nil, rec2)
-				results = append(results, result)
-				keysInRight[key] = true
+		for _, rec2 := range t2.Indexes[key2] {
+			if rec2 == nil {
+				continue
+			}
+
+			if len(t1.Indexes[key1]) == 0 {
+				results = append(results, mergeRecords(nil, rec2))
 			}
 		}
 	}

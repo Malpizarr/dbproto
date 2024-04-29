@@ -27,7 +27,7 @@ type Table struct {
 	FilePath   string
 	PrimaryKey string
 	utils      *utils.Utils
-	Indexes    map[string]map[string]*dbdata.Record
+	Indexes    map[string][]*dbdata.Record
 	Records    map[string]*dbdata.Record
 }
 
@@ -43,7 +43,7 @@ func NewTable(primaryKey, filePath string) *Table {
 		FilePath:   filePath,
 		PrimaryKey: primaryKey,
 		utils:      utils.NewUtils(),
-		Indexes:    make(map[string]map[string]*dbdata.Record),
+		Indexes:    make(map[string][]*dbdata.Record),
 	}
 	if err := table.initializeFileIfNotExists(); err != nil {
 		log.Fatalf("Failed to initialize file %s: %v", filePath, err)
@@ -60,12 +60,34 @@ func (t *Table) LoadIndexes() error {
 		return err
 	}
 
+	if t.Indexes == nil {
+		t.Indexes = make(map[string][]*dbdata.Record)
+	}
+
+	fmt.Println("Loading indexes...")
 	for _, record := range records.GetRecords() {
 		for key, value := range record.Fields {
-			if _, exists := t.Indexes[key]; !exists {
-				t.Indexes[key] = make(map[string]*dbdata.Record)
+			if value != "" {
+				t.Indexes[key] = append(t.Indexes[key], record)
+				fmt.Printf("Indexed record under key '%s'\n", key)
 			}
-			t.Indexes[key][value] = record
+		}
+	}
+	fmt.Println("Indexes loaded successfully.")
+	return nil
+}
+
+func (t *Table) ResetAndLoadIndexes() error {
+	t.Indexes = make(map[string][]*dbdata.Record)
+
+	records, err := t.readRecordsFromFile()
+	if err != nil {
+		return err
+	}
+
+	for _, record := range records.GetRecords() {
+		for key := range record.Fields {
+			t.Indexes[key] = append(t.Indexes[key], record)
 		}
 	}
 	return nil
@@ -92,25 +114,25 @@ func (t *Table) Insert(record Record) error {
 		return err
 	}
 
-	protoRecord := &dbdata.Record{Fields: make(map[string]string)}
 	primaryKeyValue := fmt.Sprintf("%v", record[t.PrimaryKey])
 	if _, exists := allRecords.Records[primaryKeyValue]; exists {
-		return fmt.Errorf("Record with primary key %s already exists", primaryKeyValue)
+		return fmt.Errorf("record with primary key %s already exists", primaryKeyValue)
 	}
+
+	protoRecord := &dbdata.Record{Fields: make(map[string]string)}
 	for key, value := range record {
 		val, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("invalid value type for field %s: %v", key, value)
+		if !ok || val == "" {
+			return fmt.Errorf("invalid or empty value type for field %s: %v", key, value)
 		}
 		protoRecord.Fields[key] = val
-		if _, exists := t.Indexes[key]; !exists {
-			t.Indexes[key] = make(map[string]*dbdata.Record)
+		if t.Indexes[key] == nil {
+			t.Indexes[key] = []*dbdata.Record{}
 		}
-		t.Indexes[key][val] = protoRecord
+		t.Indexes[key] = append(t.Indexes[key], protoRecord)
 	}
 
 	allRecords.Records[primaryKeyValue] = protoRecord
-
 	return t.writeRecordsToFile(allRecords)
 }
 
@@ -144,19 +166,21 @@ func (t *Table) Update(key string, updates Record) error {
 	for field, newValue := range updates {
 		oldVal, ok := existingRecord.Fields[field]
 		if ok {
-			if idxMap, found := t.Indexes[field]; found {
-				delete(idxMap, oldVal)
+			newIdxMap := make([]*dbdata.Record, 0)
+			for _, r := range t.Indexes[field] {
+				if r.Fields[field] != oldVal {
+					newIdxMap = append(newIdxMap, r)
+				}
 			}
+			t.Indexes[field] = newIdxMap
 		}
 		newValStr, ok := newValue.(string)
 		if !ok {
 			return fmt.Errorf("non-string value for field %s", field)
 		}
 		existingRecord.Fields[field] = newValStr
-		if _, exists := t.Indexes[field]; !exists {
-			t.Indexes[field] = make(map[string]*dbdata.Record)
-		}
-		t.Indexes[field][newValStr] = existingRecord
+		t.Indexes[field] = make([]*dbdata.Record, 0)
+		t.Indexes[field] = append(t.Indexes[field], existingRecord)
 	}
 
 	return t.writeRecordsToFile(allRecords)
@@ -176,9 +200,13 @@ func (t *Table) Delete(key string) error {
 	}
 
 	for field, value := range record.Fields {
-		if idxMap, found := t.Indexes[field]; found {
-			delete(idxMap, value)
+		newIdxMap := make([]*dbdata.Record, 0)
+		for _, r := range t.Indexes[field] {
+			if r.Fields[field] != value {
+				newIdxMap = append(newIdxMap, r)
+			}
 		}
+		t.Indexes[field] = newIdxMap
 	}
 
 	delete(allRecords.Records, key)
