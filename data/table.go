@@ -78,16 +78,21 @@ func (t *Table) LoadIndexes() error {
 }
 
 func (t *Table) ResetAndLoadIndexes() error {
+	t.Lock()
+	defer t.Unlock()
+
 	t.Indexes = make(map[string][]*dbdata.Record)
 
 	records, err := t.readRecordsFromFile()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read records from file: %v", err)
 	}
 
 	for _, record := range records.GetRecords() {
-		for key := range record.Fields {
-			t.Indexes[key] = append(t.Indexes[key], record)
+		for key, value := range record.Fields {
+			if value != "" {
+				t.Indexes[key] = append(t.Indexes[key], record)
+			}
 		}
 	}
 	return nil
