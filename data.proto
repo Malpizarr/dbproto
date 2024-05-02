@@ -1,8 +1,7 @@
 
 syntax = "proto3";
 
-package data; // This is the protobuf package name, it doesn't have to change
-
+package data;
 option go_package = "./dbdata;dbdata";
 
 message Record { map<string, string> fields = 1; }

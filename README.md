@@ -9,8 +9,8 @@ Prerequisites
     Go 1.15 or higher
     Protobuf compiler (protoc)
     github.com/joho/godotenv for loading environment variables
-    github.com/Malpizarr/dbproto/data and github.com/Malpizarr/dbproto/api for the core functionality
-    github.com/Malpizarr/dbproto/utils for encryption utilities
+    github.com/Malpizarr/dbproto/pkg/data and github.com/Malpizarr/dbproto/pkg/api for the core functionality
+    github.com/Malpizarr/dbproto/pkg/utils for encryption utilities
 
 # Installation
 
@@ -33,6 +33,10 @@ Set up the required environment variables. Create a .env file in the root of you
     AES_KEY: A 32-byte key used for AES encryption.
 
 # Building the Project
+
+Navigate to the project directory:
+
+    cd cmd/dbproto
 
 Compile the project using:
 
