@@ -7,8 +7,8 @@ import (
 	"path"
 	"sync"
 
-	"github.com/Malpizarr/dbproto/dbdata"
-	"github.com/Malpizarr/dbproto/utils"
+	"github.com/Malpizarr/dbproto/pkg/dbdata"
+	"github.com/Malpizarr/dbproto/pkg/utils"
 
 	"google.golang.org/protobuf/proto"
 )

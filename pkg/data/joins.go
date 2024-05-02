@@ -3,7 +3,7 @@ package data
 import (
 	"fmt"
 
-	"github.com/Malpizarr/dbproto/dbdata"
+	"github.com/Malpizarr/dbproto/pkg/dbdata"
 )
 
 type JoinType int

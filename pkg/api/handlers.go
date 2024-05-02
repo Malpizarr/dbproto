@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Malpizarr/dbproto/data"
+	"github.com/Malpizarr/dbproto/pkg/data"
 )
 
 func CreateDatabaseHandler(server *data.Server) http.HandlerFunc {

@@ -4,13 +4,14 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/Malpizarr/dbproto/api"
-	"github.com/Malpizarr/dbproto/data"
+	"github.com/Malpizarr/dbproto/pkg/api"
+	"github.com/Malpizarr/dbproto/pkg/data"
 	"github.com/joho/godotenv"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
+	envPath := "../../.env"
+	if err := godotenv.Load(envPath); err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 

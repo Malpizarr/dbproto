@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/Malpizarr/dbproto/data"
+	"github.com/Malpizarr/dbproto/pkg/data"
 )
 
 func SetupRoutes(server *data.Server) {

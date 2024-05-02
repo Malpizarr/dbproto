@@ -3,7 +3,7 @@ package data
 import (
 	"sync"
 
-	"github.com/Malpizarr/dbproto/dbdata"
+	"github.com/Malpizarr/dbproto/pkg/dbdata"
 	"google.golang.org/protobuf/proto"
 )
 
