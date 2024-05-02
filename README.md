@@ -84,4 +84,4 @@ Defines records and record collections for serialization:
 
 # Transaction Management
 
-    The data package includes a transaction mechanism for performing CRUD operations on tables. The Transaction struct stores the original records before any changes, and the provided methods (InsertWithTransaction, UpdateWithTransaction, DeleteWithTransaction) ensure that either all changes are committed or rolled back, maintaining data consistency.
+The data package includes a transaction mechanism for performing CRUD operations on tables. The Transaction struct stores the original records before any changes, and the provided methods (InsertWithTransaction, UpdateWithTransaction, DeleteWithTransaction) ensure that either all changes are committed or rolled back, maintaining data consistency.
