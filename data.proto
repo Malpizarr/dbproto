@@ -1,9 +1,0 @@
-
-syntax = "proto3";
-
-package data;
-option go_package = "./dbdata;dbdata";
-
-message Record { map<string, string> fields = 1; }
-
-message Records { map<string, Record> records = 1; }
