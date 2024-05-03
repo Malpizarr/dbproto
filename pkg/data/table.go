@@ -155,6 +155,20 @@ func (t *Table) SelectAll() ([]*dbdata.Record, error) {
 	return allRecords, nil
 }
 
+func (t *Table) Select(key string) (*dbdata.Record, error) {
+	t.RLock()
+	defer t.RUnlock()
+	records, err := t.readRecordsFromFile()
+	if err != nil {
+		return nil, err
+	}
+	record, exists := records.Records[key]
+	if !exists {
+		return nil, fmt.Errorf("Record with key %s not found", key)
+	}
+	return record, nil
+}
+
 func (t *Table) Update(key string, updates Record) error {
 	t.Lock()
 	defer t.Unlock()
