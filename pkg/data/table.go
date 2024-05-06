@@ -11,6 +11,7 @@ import (
 	"github.com/Malpizarr/dbproto/pkg/utils"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type Record map[string]interface{}
@@ -67,7 +68,7 @@ func (t *Table) LoadIndexes() error {
 	fmt.Println("Loading indexes...")
 	for _, record := range records.GetRecords() {
 		for key, value := range record.Fields {
-			if value != "" {
+			if value != nil && value.GetStringValue() != "" {
 				t.Indexes[key] = append(t.Indexes[key], record)
 				fmt.Printf("Indexed record under key '%s'\n", key)
 			}
@@ -90,7 +91,7 @@ func (t *Table) ResetAndLoadIndexes() error {
 
 	for _, record := range records.GetRecords() {
 		for key, value := range record.Fields {
-			if value != "" {
+			if value != nil && value.GetStringValue() != "" {
 				t.Indexes[key] = append(t.Indexes[key], record)
 			}
 		}
@@ -124,13 +125,13 @@ func (t *Table) Insert(record Record) error {
 		return fmt.Errorf("record with primary key %s already exists", primaryKeyValue)
 	}
 
-	protoRecord := &dbdata.Record{Fields: make(map[string]string)}
+	protoRecord := &dbdata.Record{Fields: make(map[string]*structpb.Value)}
 	for key, value := range record {
-		val, ok := value.(string)
-		if !ok || val == "" {
-			return fmt.Errorf("invalid or empty value type for field %s: %v", key, value)
+		protoValue, err := structpb.NewValue(value)
+		if err != nil {
+			return fmt.Errorf("invalid value type for field %s: %v", key, err)
 		}
-		protoRecord.Fields[key] = val
+		protoRecord.Fields[key] = protoValue
 		if t.Indexes[key] == nil {
 			t.Indexes[key] = []*dbdata.Record{}
 		}
@@ -169,22 +170,24 @@ func (t *Table) Select(key string) (*dbdata.Record, error) {
 	return record, nil
 }
 
-func (t *Table) Update(key string, updates Record) error {
+func (t *Table) Update(key interface{}, updates Record) error {
 	t.Lock()
 	defer t.Unlock()
+
+	keyStr := fmt.Sprintf("%v", key)
 
 	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
 		return err
 	}
-	existingRecord, exists := allRecords.Records[key]
+	existingRecord, exists := allRecords.Records[keyStr]
 	if !exists {
-		return fmt.Errorf("Record with key %s not found", key)
+		return fmt.Errorf("Record with key %s not found", keyStr)
 	}
 
 	for field, newValue := range updates {
-		oldVal, ok := existingRecord.Fields[field]
-		if ok {
+		oldVal := existingRecord.Fields[field]
+		if oldVal != nil {
 			newIdxMap := make([]*dbdata.Record, 0)
 			for _, r := range t.Indexes[field] {
 				if r.Fields[field] != oldVal {
@@ -193,42 +196,44 @@ func (t *Table) Update(key string, updates Record) error {
 			}
 			t.Indexes[field] = newIdxMap
 		}
-		newValStr, ok := newValue.(string)
-		if !ok {
-			return fmt.Errorf("non-string value for field %s", field)
+		newVal, err := structpb.NewValue(newValue)
+		if err != nil {
+			return fmt.Errorf("error converting newValue for field %s: %v", field, err)
 		}
-		existingRecord.Fields[field] = newValStr
-		t.Indexes[field] = make([]*dbdata.Record, 0)
+		existingRecord.Fields[field] = newVal
 		t.Indexes[field] = append(t.Indexes[field], existingRecord)
 	}
 
 	return t.writeRecordsToFile(allRecords)
 }
 
-func (t *Table) Delete(key string) error {
+func (t *Table) Delete(key interface{}) error {
 	t.Lock()
 	defer t.Unlock()
+
+	keyStr := fmt.Sprintf("%v", key)
 
 	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
 		return err
 	}
-	record, exists := allRecords.Records[key]
+
+	record, exists := allRecords.Records[keyStr]
 	if !exists {
-		return fmt.Errorf("Record with key %s not found", key)
+		return fmt.Errorf("Record with key %s not found", keyStr)
 	}
 
 	for field, value := range record.Fields {
 		newIdxMap := make([]*dbdata.Record, 0)
 		for _, r := range t.Indexes[field] {
-			if r.Fields[field] != value {
+			if r.Fields[field].String() != value.String() {
 				newIdxMap = append(newIdxMap, r)
 			}
 		}
 		t.Indexes[field] = newIdxMap
 	}
 
-	delete(allRecords.Records, key)
+	delete(allRecords.Records, keyStr)
 
 	return t.writeRecordsToFile(allRecords)
 }

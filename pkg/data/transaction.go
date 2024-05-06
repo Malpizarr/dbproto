@@ -71,7 +71,7 @@ func (t *Table) InsertWithTransaction(record Record) error {
 }
 
 // erforms an update operation within a transaction context
-func (t *Table) UpdateWithTransaction(key string, updates Record) error {
+func (t *Table) UpdateWithTransaction(key interface{}, updates Record) error {
 	transaction := NewTransaction(t)
 	if err := transaction.Start(); err != nil {
 		return err // Start returns an error if the transaction cannot be started
@@ -87,7 +87,7 @@ func (t *Table) UpdateWithTransaction(key string, updates Record) error {
 }
 
 // performs a delete operation within a transaction context.
-func (t *Table) DeleteWithTransaction(key string) error {
+func (t *Table) DeleteWithTransaction(key interface{}) error {
 	transaction := NewTransaction(t)
 	if err := transaction.Start(); err != nil {
 		return err // Start returns an error if the transaction cannot be started
