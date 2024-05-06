@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Malpizarr/dbproto/pkg/dbdata"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type JoinType int
@@ -16,6 +17,7 @@ const (
 )
 
 // Func to create joins  between two tables it perform one to many join between two tables, based on the key fields provided
+
 func JoinTables(t1, t2 *Table, key1, key2 string, joinType JoinType) ([]map[string]interface{}, error) {
 	results := make([]map[string]interface{}, 0)
 
@@ -35,7 +37,7 @@ func JoinTables(t1, t2 *Table, key1, key2 string, joinType JoinType) ([]map[stri
 		// Attempt to find matching records in t2
 		matched := false
 		for _, rec2 := range t2.Indexes[key2] {
-			if rec2 != nil && rec1.Fields[key1] == rec2.Fields[key2] { // Check matching condition
+			if rec2 != nil && isEqual(rec1.Fields[key1], rec2.Fields[key2]) {
 				results = append(results, mergeRecords(rec1, rec2))
 				matched = true
 			}
@@ -57,7 +59,7 @@ func JoinTables(t1, t2 *Table, key1, key2 string, joinType JoinType) ([]map[stri
 			// Check if rec2 was matched
 			matched := false
 			for _, rec1 := range t1.Indexes[key1] {
-				if rec1 != nil && rec1.Fields[key1] == rec2.Fields[key2] {
+				if rec1 != nil && isEqual(rec1.Fields[key1], rec2.Fields[key2]) {
 					matched = true
 					break
 				}
@@ -73,16 +75,25 @@ func JoinTables(t1, t2 *Table, key1, key2 string, joinType JoinType) ([]map[stri
 	return results, nil
 }
 
+// Helper function to compare *structpb.Value fields
+func isEqual(val1, val2 *structpb.Value) bool {
+	if val1 == nil || val2 == nil {
+		return false
+	}
+	// Compare based on actual type; here assuming both are string values for simplicity
+	return val1.GetStringValue() == val2.GetStringValue()
+}
+
 func mergeRecords(rec1, rec2 *dbdata.Record) map[string]interface{} {
 	result := make(map[string]interface{})
 	if rec1 != nil {
 		for k, v := range rec1.Fields {
-			result["t1."+k] = v
+			result["t1."+k] = v.GetStringValue()
 		}
 	}
 	if rec2 != nil {
 		for k, v := range rec2.Fields {
-			result["t2."+k] = v
+			result["t2."+k] = v.GetStringValue()
 		}
 	}
 	return result
