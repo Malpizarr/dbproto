@@ -80,20 +80,42 @@ func isEqual(val1, val2 *structpb.Value) bool {
 	if val1 == nil || val2 == nil {
 		return false
 	}
-	// Compare based on actual type; here assuming both are string values for simplicity
-	return val1.GetStringValue() == val2.GetStringValue()
+	// Handling both strings and numbers
+	if val1.Kind.(*structpb.Value_StringValue) != nil && val2.Kind.(*structpb.Value_StringValue) != nil {
+		return val1.GetStringValue() == val2.GetStringValue()
+	} else if val1.Kind.(*structpb.Value_NumberValue) != nil && val2.Kind.(*structpb.Value_NumberValue) != nil {
+		return val1.GetNumberValue() == val2.GetNumberValue()
+	}
+	return false
 }
 
 func mergeRecords(rec1, rec2 *dbdata.Record) map[string]interface{} {
 	result := make(map[string]interface{})
+	extractValue := func(v *structpb.Value) interface{} {
+		switch x := v.Kind.(type) {
+		case *structpb.Value_StringValue:
+			return x.StringValue
+		case *structpb.Value_NumberValue:
+			return x.NumberValue
+		case *structpb.Value_BoolValue:
+			return x.BoolValue
+		default:
+			return nil
+		}
+	}
+
 	if rec1 != nil {
 		for k, v := range rec1.Fields {
-			result["t1."+k] = v.GetStringValue()
+			if v != nil {
+				result["t1."+k] = extractValue(v)
+			}
 		}
 	}
 	if rec2 != nil {
 		for k, v := range rec2.Fields {
-			result["t2."+k] = v.GetStringValue()
+			if v != nil {
+				result["t2."+k] = extractValue(v)
+			}
 		}
 	}
 	return result
