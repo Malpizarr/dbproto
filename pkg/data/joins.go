@@ -89,6 +89,9 @@ func isEqual(val1, val2 *structpb.Value) bool {
 	return false
 }
 
+// mergeRecords merges two dbdata.Record objects and returns a map of field names to their corresponding values.
+// The function extracts the values from the input records and prefixes the field names with "t1." or "t2."
+// depending on the record they belong to.
 func mergeRecords(rec1, rec2 *dbdata.Record) map[string]interface{} {
 	result := make(map[string]interface{})
 	extractValue := func(v *structpb.Value) interface{} {
