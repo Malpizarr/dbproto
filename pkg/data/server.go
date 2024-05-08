@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 )
 
@@ -49,7 +50,20 @@ func (s *Server) LoadDatabases(serverDir string) error {
 }
 
 func getDefaultServerDir() string {
-	return "./databaseprototype"
+	var baseDir string
+	switch Os := runtime.GOOS; Os {
+	case "windows":
+		baseDir = os.Getenv("APPDATA")
+		if baseDir == "" {
+			baseDir = os.Getenv("USERPROFILE")
+		}
+	case "linux", "darwin":
+		baseDir = os.Getenv("HOME")
+	default:
+		baseDir = "."
+	}
+
+	return filepath.Join(baseDir, "DBPROTO", "databases")
 }
 
 func (s *Server) CreateDatabase(name string) error {

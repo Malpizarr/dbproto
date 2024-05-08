@@ -94,6 +94,7 @@ func isEqual(val1, val2 *structpb.Value) bool {
 // depending on the record they belong to.
 func mergeRecords(rec1, rec2 *dbdata.Record) map[string]interface{} {
 	result := make(map[string]interface{})
+	// this will extract the value from the records and put it in the result map
 	extractValue := func(v *structpb.Value) interface{} {
 		switch x := v.Kind.(type) {
 		case *structpb.Value_StringValue:
