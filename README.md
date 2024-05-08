@@ -42,6 +42,16 @@ Compile the project using:
 
     go build
 
+# Using the package
+
+This package provides a simple server for database operations, including table creation, data encryption/decryption, and basic CRUD operations on records. The server listens for HTTP requests and responds with JSON payloads. The server uses environment variables for configuration and Protobuf for data serialization.
+
+For usage in your project, import the following packages:
+
+    github.com/Malpizarr/dbproto/pkg/data
+    github.com/Malpizarr/dbproto/pkg/api
+    github.com/Malpizarr/dbproto/pkg/utils
+
 # Running the Server
 
 Start the server by executing the compiled binary:
