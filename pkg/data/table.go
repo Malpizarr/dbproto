@@ -39,7 +39,6 @@ func NewTable(primaryKey, filePath string) *Table {
 			log.Fatalf("Failed to create directory %s: %v", dir, err)
 		}
 	}
-	log.Printf("Creating table with file path: %s", filePath)
 	table := &Table{
 		FilePath:   filePath,
 		PrimaryKey: primaryKey,
@@ -70,11 +69,9 @@ func (t *Table) LoadIndexes() error {
 		for key, value := range record.Fields {
 			if value != nil && value.GetStringValue() != "" {
 				t.Indexes[key] = append(t.Indexes[key], record)
-				fmt.Printf("Indexed record under key '%s'\n", key)
 			}
 		}
 	}
-	fmt.Println("Indexes loaded successfully.")
 	return nil
 }
 

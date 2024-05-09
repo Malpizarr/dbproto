@@ -1,7 +1,6 @@
 package data
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -76,18 +75,14 @@ func (db *Database) LoadTables(dbDir string) error {
 	return nil
 }
 
-func (db *Database) ListTables(w http.ResponseWriter) {
+func (db *Database) ListTables() ([]string, error) {
 	db.RLock()
 	defer db.RUnlock()
+
 	tables := make([]string, 0, len(db.Tables))
 	for tableName := range db.Tables {
 		tables = append(tables, tableName)
 	}
-	data, err := json.Marshal(tables)
-	if err != nil {
-		http.Error(w, "Failed to serialize tables", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+
+	return tables, nil
 }
