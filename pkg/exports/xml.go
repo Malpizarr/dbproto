@@ -19,7 +19,7 @@ type FieldXML struct {
 	Value string `xml:"Value"`
 }
 
-func formatProtoValue(val *structpb.Value) string {
+func formatProtoValueXML(val *structpb.Value) string {
 	if val == nil {
 		return ""
 	}
@@ -54,7 +54,7 @@ func ExportRecordsToXML(records []*dbdata.Record, filename string) error {
 	for _, rec := range records {
 		fields := make([]FieldXML, 0, len(rec.Fields))
 		for key, protoVal := range rec.Fields {
-			formattedValue := formatProtoValue(protoVal)
+			formattedValue := formatProtoValueXML(protoVal)
 			fields = append(fields, FieldXML{Key: key, Value: formattedValue})
 		}
 		xmlRecords = append(xmlRecords, RecordXML{Fields: fields})

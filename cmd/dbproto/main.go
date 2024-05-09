@@ -56,25 +56,34 @@ func newListCmd() *cobra.Command {
 		Long:  `List all databases in the server or tables within a specific database.`,
 		Run:   listFunc,
 	}
+
 	return cmd
 }
 
 func newExportCmd() *cobra.Command {
+	var format string
 	cmd := &cobra.Command{
 		Use:   "export [database] [table] [filename]",
-		Short: "Export records of a table to an XML file",
-		Long:  `Export all records from a specified table in a database to an XML file.`,
+		Short: "Export records of a table to a specified format",
+		Long:  `Export all records from a specified table in a database to a specified format (e.g., CSV, XML).`,
 		Run:   exportFunc,
 	}
+	cmd.Flags().StringVarP(&format, "format", "f", "csv", "Format to export (csv, xml)")
 	return cmd
 }
 
 func exportFunc(cmd *cobra.Command, args []string) {
 	if len(args) != 3 {
-		fmt.Println("Usage: export [database] [table] [filename]")
+		fmt.Println("Usage: export [database] [table] [filename] --format=[csv|xml]")
 		return
 	}
 	databaseName, tableName, filename := args[0], args[1], args[2]
+
+	format, err := cmd.Flags().GetString("format")
+	if err != nil {
+		color.Red("Error retrieving format flag: %v", err)
+		return
+	}
 
 	server := data.NewServer()
 	if err := server.Initialize(); err != nil {
@@ -100,12 +109,23 @@ func exportFunc(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if err := exports.ExportRecordsToXML(records, filename); err != nil {
-		color.Red("Error exporting records to XML: %v", err)
+	switch format {
+	case "csv":
+		if err := exports.ExportRecordsToCSV(records, filename); err != nil {
+			color.Red("Error exporting records to CSV: %v", err)
+			return
+		}
+	case "xml":
+		if err := exports.ExportRecordsToXML(records, filename); err != nil {
+			color.Red("Error exporting records to XML: %v", err)
+			return
+		}
+	default:
+		color.Red("Unsupported format %s", format)
 		return
 	}
 
-	color.Green("Records were successfully exported to %s", filename)
+	color.Green("Records were successfully exported to %s in %s format", filename, format)
 }
 
 func listFunc(cmd *cobra.Command, args []string) {
