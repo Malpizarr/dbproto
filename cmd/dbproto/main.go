@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -11,16 +10,11 @@ import (
 	"github.com/Malpizarr/dbproto/pkg/data"
 	"github.com/Malpizarr/dbproto/pkg/exports"
 	"github.com/fatih/color"
-	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func main() {
-	envPath := "../../.env"
-	if err := godotenv.Load(envPath); err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
 	rootCmd := &cobra.Command{
 		Use:   "dbproto",
 		Short: "dbproto is a CLI for database interactions",
