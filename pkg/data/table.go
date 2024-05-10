@@ -150,16 +150,23 @@ func (t *Table) SelectAll() ([]*dbdata.Record, error) {
 	return allRecords, nil
 }
 
-func (t *Table) Select(key string) (*dbdata.Record, error) {
+func (t *Table) Select(key interface{}) (*dbdata.Record, error) {
 	t.RLock()
 	defer t.RUnlock()
+
+	keyStr, ok := key.(string)
+	if !ok {
+		return nil, fmt.Errorf("key must be a string, got %T", key)
+	}
+
 	records, err := t.readRecordsFromFile()
 	if err != nil {
 		return nil, err
 	}
-	record, exists := records.Records[key]
+
+	record, exists := records.Records[keyStr]
 	if !exists {
-		return nil, fmt.Errorf("Record with key %s not found", key)
+		return nil, fmt.Errorf("record with key %s not found", keyStr)
 	}
 	return record, nil
 }
@@ -168,7 +175,10 @@ func (t *Table) Update(key interface{}, updates Record) error {
 	t.Lock()
 	defer t.Unlock()
 
-	keyStr := fmt.Sprintf("%v", key)
+	keyStr, ok := key.(string)
+	if !ok {
+		return fmt.Errorf("key must be a string, got %T", key)
+	}
 
 	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
@@ -205,7 +215,10 @@ func (t *Table) Delete(key interface{}) error {
 	t.Lock()
 	defer t.Unlock()
 
-	keyStr := fmt.Sprintf("%v", key)
+	keyStr, ok := key.(string)
+	if !ok {
+		return fmt.Errorf("key must be a string, got %T", key)
+	}
 
 	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
