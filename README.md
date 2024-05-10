@@ -72,7 +72,7 @@ $aesKey = openssl rand -hex 16
 [System.Environment]::SetEnvironmentVariable('AES_KEY', $aesKey, [System.EnvironmentVariableTarget]::User)
 ```
 
-Installation
+# Installation
 
 Clone the repository:
 
