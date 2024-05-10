@@ -47,8 +47,6 @@ func NewTable(primaryKey, filePath string) *Table {
 	}
 	if err := table.initializeFileIfNotExists(); err != nil {
 		log.Fatalf("Failed to initialize file %s: %v", filePath, err)
-	} else {
-		log.Printf("File %s initialized successfully.", filePath)
 	}
 	table.LoadIndexes()
 	return table
@@ -64,7 +62,6 @@ func (t *Table) LoadIndexes() error {
 		t.Indexes = make(map[string][]*dbdata.Record)
 	}
 
-	fmt.Println("Loading indexes...")
 	for _, record := range records.GetRecords() {
 		for key, value := range record.Fields {
 			if value != nil && value.GetStringValue() != "" {
