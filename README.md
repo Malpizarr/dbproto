@@ -11,8 +11,68 @@ Prerequisites
     github.com/joho/godotenv for loading environment variables
     github.com/Malpizarr/dbproto/pkg/data and github.com/Malpizarr/dbproto/pkg/api for the core functionality
     github.com/Malpizarr/dbproto/pkg/utils for encryption utilities
+    AES_KEY environment variable for encryption key
 
-# Installation
+# Environment Variable Setup Guide for AES Key
+
+This README guide provides instructions on how to set up an AES key as an environment variable on macOS, Linux, and Windows using Zsh, Bash, and PowerShell. This includes generating the key with OpenSSL.
+
+Requirements
+
+- OpenSSL must be installed on your system.
+- Access to the terminal or command line interface.
+
+Setting Up AES Key Environment Variable
+
+### macOS and Linux
+
+#### Bash
+
+Open your terminal and execute the following commands:
+
+```bash
+echo "export AES_KEY=$(openssl rand -hex 16)" >> ~/.bashrc
+source ~/.bashrc
+```
+
+For a system-wide setup (all users), you might prefer:
+
+```bash
+echo "export AES_KEY=$(openssl rand -hex 16)" | sudo tee -a /etc/profile
+```
+
+#### Zsh
+
+For Zsh users, execute the following commands:
+
+```bash
+
+echo "export AES_KEY=$(openssl rand -hex 16)" >> ~/.zshrc
+source ~/.zshrc
+```
+
+### Windows
+
+#### PowerShell
+
+Open PowerShell as Administrator and run:
+
+For system-wide environment variable:
+
+```powershell
+$aesKey = openssl rand -hex 16
+[System.Environment]::SetEnvironmentVariable('AES_KEY', $aesKey, [System.EnvironmentVariableTarget]::Machine)
+```
+
+For the current user only:
+
+```powershell
+
+$aesKey = openssl rand -hex 16
+[System.Environment]::SetEnvironmentVariable('AES_KEY', $aesKey, [System.EnvironmentVariableTarget]::User)
+```
+
+Installation
 
 Clone the repository:
 
@@ -99,3 +159,19 @@ Defines records and record collections for serialization:
 # Transaction Management
 
 The data package includes a transaction mechanism for performing CRUD operations on tables. The Transaction struct stores the original records before any changes, and the provided methods (InsertWithTransaction, UpdateWithTransaction, DeleteWithTransaction) ensure that either all changes are committed or rolled back, maintaining data consistency.
+
+```
+
+```
+
+```
+
+```
+
+```
+
+```
+
+```
+
+```
