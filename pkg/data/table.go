@@ -154,10 +154,7 @@ func (t *Table) Select(key interface{}) (*dbdata.Record, error) {
 	t.RLock()
 	defer t.RUnlock()
 
-	keyStr, ok := key.(string)
-	if !ok {
-		return nil, fmt.Errorf("key must be a string, got %T", key)
-	}
+	keyStr := fmt.Sprintf("%v", key)
 
 	records, err := t.readRecordsFromFile()
 	if err != nil {
@@ -175,11 +172,7 @@ func (t *Table) Update(key interface{}, updates Record) error {
 	t.Lock()
 	defer t.Unlock()
 
-	keyStr, ok := key.(string)
-	if !ok {
-		return fmt.Errorf("key must be a string, got %T", key)
-	}
-
+	keyStr := fmt.Sprintf("%v", key)
 	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
 		return err
@@ -215,10 +208,7 @@ func (t *Table) Delete(key interface{}) error {
 	t.Lock()
 	defer t.Unlock()
 
-	keyStr, ok := key.(string)
-	if !ok {
-		return fmt.Errorf("key must be a string, got %T", key)
-	}
+	keyStr := fmt.Sprintf("%v", key)
 
 	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
