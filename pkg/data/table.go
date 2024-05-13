@@ -150,6 +150,57 @@ func (t *Table) SelectAll() ([]*dbdata.Record, error) {
 	return allRecords, nil
 }
 
+func Equal(value1, value2 *structpb.Value) bool {
+	if value1.GetKind() == nil || value2.GetKind() == nil {
+		return false
+	}
+
+	switch value1.GetKind().(type) {
+	case *structpb.Value_NumberValue:
+		return value1.GetNumberValue() == value2.GetNumberValue()
+	case *structpb.Value_StringValue:
+		return value1.GetStringValue() == value2.GetStringValue()
+	case *structpb.Value_BoolValue:
+		return value1.GetBoolValue() == value2.GetBoolValue()
+	case *structpb.Value_StructValue:
+		return false
+	case *structpb.Value_ListValue:
+
+		return false
+	default:
+		return false
+	}
+}
+
+func (t *Table) SelectWithFilter(filters map[string]interface{}) ([]*dbdata.Record, error) {
+	t.RLock()
+	defer t.RUnlock()
+
+	allRecords, err := t.readRecordsFromFile()
+	if err != nil {
+		return nil, err
+	}
+
+	var matchedRecords []*dbdata.Record
+
+RecordsLoop:
+	for _, record := range allRecords.GetRecords() {
+		for field, filterValue := range filters {
+			protoValue, err := structpb.NewValue(filterValue)
+			if err != nil {
+				return nil, fmt.Errorf("error converting filter value for field %s: %v", field, err)
+			}
+			value, exists := record.Fields[field]
+			if !exists || !Equal(value, protoValue) {
+				continue RecordsLoop
+			}
+		}
+		matchedRecords = append(matchedRecords, record)
+	}
+
+	return matchedRecords, nil
+}
+
 func (t *Table) Select(key interface{}) (*dbdata.Record, error) {
 	t.RLock()
 	defer t.RUnlock()
