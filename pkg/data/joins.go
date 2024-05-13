@@ -37,7 +37,7 @@ func JoinTables(t1, t2 *Table, key1, key2 string, joinType JoinType) ([]map[stri
 		// Attempt to find matching records in t2
 		matched := false
 		for _, rec2 := range t2.Indexes[key2] {
-			if rec2 != nil && isEqual(rec1.Fields[key1], rec2.Fields[key2]) {
+			if rec2 != nil && Equal(rec1.Fields[key1], rec2.Fields[key2]) {
 				results = append(results, mergeRecords(rec1, rec2))
 				matched = true
 			}
@@ -59,7 +59,7 @@ func JoinTables(t1, t2 *Table, key1, key2 string, joinType JoinType) ([]map[stri
 			// Check if rec2 was matched
 			matched := false
 			for _, rec1 := range t1.Indexes[key1] {
-				if rec1 != nil && isEqual(rec1.Fields[key1], rec2.Fields[key2]) {
+				if rec1 != nil && Equal(rec1.Fields[key1], rec2.Fields[key2]) {
 					matched = true
 					break
 				}
@@ -73,20 +73,6 @@ func JoinTables(t1, t2 *Table, key1, key2 string, joinType JoinType) ([]map[stri
 	}
 
 	return results, nil
-}
-
-// Helper function to compare *structpb.Value fields
-func isEqual(val1, val2 *structpb.Value) bool {
-	if val1 == nil || val2 == nil {
-		return false
-	}
-	// Handling both strings and numbers
-	if val1.Kind.(*structpb.Value_StringValue) != nil && val2.Kind.(*structpb.Value_StringValue) != nil {
-		return val1.GetStringValue() == val2.GetStringValue()
-	} else if val1.Kind.(*structpb.Value_NumberValue) != nil && val2.Kind.(*structpb.Value_NumberValue) != nil {
-		return val1.GetNumberValue() == val2.GetNumberValue()
-	}
-	return false
 }
 
 // mergeRecords merges two dbdata.Record objects and returns a map of field names to their corresponding values.
