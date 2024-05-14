@@ -54,7 +54,20 @@ func (t *Transaction) Rollback() error {
 	return t.Table.writeRecordsToFile(&dbdata.Records{Records: t.OriginalRecords})
 }
 
-// InsertWithTransaction performs an insert operation within a transaction context
+// InsertWithTransaction is a method of the Table struct that performs an insert operation within a transaction context.
+// It first creates a new transaction for the table.
+// It then starts the transaction by locking the table and duplicating the records for potential rollback.
+// If an error occurs while starting the transaction, it returns the error.
+// It then tries to insert the record into the table.
+// If an error occurs while inserting the record, it rolls back the transaction and returns the error.
+// If the insert operation is successful, it commits the transaction and returns nil.
+//
+// Parameters:
+// - record: A Record representing the record to be inserted into the table.
+//
+// Returns:
+// - If the operation is successful, it returns nil.
+// - If an error occurs, it returns the error.
 func (t *Table) InsertWithTransaction(record Record) error {
 	transaction := NewTransaction(t)
 	if err := transaction.Start(); err != nil {
@@ -70,34 +83,61 @@ func (t *Table) InsertWithTransaction(record Record) error {
 	return transaction.Commit()
 }
 
-// UpdateWithTransaction performs an update operation within a transaction context
+// UpdateWithTransaction is a method of the Table struct that performs an update operation within a transaction context.
+// It first creates a new transaction for the table.
+// It then starts the transaction by locking the table and duplicating the records for potential rollback.
+// If an error occurs while starting the transaction, it returns the error.
+// It then tries to update the record in the table with the given key and updates.
+// If an error occurs while updating the record, it rolls back the transaction and returns the error.
+// If the update operation is successful, it commits the transaction and returns nil.
+//
+// Parameters:
+// - key: An interface{} representing the key of the record to be updated. The key is converted to a string before the update is performed.
+// - updates: A Record representing the fields to be updated in the record. The keys are field names and the values are the new field values.
+//
+// Returns:
+// - If the operation is successful, it returns nil.
+// - If an error occurs, it returns the error.
 func (t *Table) UpdateWithTransaction(key interface{}, updates Record) error {
 	transaction := NewTransaction(t)
 	if err := transaction.Start(); err != nil {
 		return err // Start returns an error if the transaction cannot be started
 	}
 
-	// Tries to udate the record into the table and if it fails it rolls back the transaction
+	// Tries to update the record in the table and if it fails it rolls back the transaction
 	if err := t.Update(key, updates); err != nil {
 		transaction.Rollback()
 		return err
 	}
-	// Commit the transaction if the insert succeeds
+	// Commit the transaction if the update succeeds
 	return transaction.Commit()
 }
 
-// DeleteWithTransaction performs a delete operation within a transaction context.
+// DeleteWithTransaction is a method of the Table struct that performs a delete operation within a transaction context.
+// It first creates a new transaction for the table.
+// It then starts the transaction by locking the table and duplicating the records for potential rollback.
+// If an error occurs while starting the transaction, it returns the error.
+// It then tries to delete the record from the table with the given key.
+// If an error occurs while deleting the record, it rolls back the transaction and returns the error.
+// If the delete operation is successful, it commits the transaction and returns nil.
+//
+// Parameters:
+// - key: An interface{} representing the key of the record to be deleted. The key is converted to a string before the deletion is performed.
+//
+// Returns:
+// - If the operation is successful, it returns nil.
+// - If an error occurs, it returns the error.
 func (t *Table) DeleteWithTransaction(key interface{}) error {
 	transaction := NewTransaction(t)
 	if err := transaction.Start(); err != nil {
 		return err // Start returns an error if the transaction cannot be started
 	}
-	// Tries to delete the record into the table and if it fails it rolls back the transaction
+	// Tries to delete the record from the table and if it fails it rolls back the transaction
 	if err := t.Delete(key); err != nil {
 		transaction.Rollback()
 		return err
 	}
 
-	// Commit the transaction if the insert succeeds
+	// Commit the transaction if the delete operation succeeds
 	return transaction.Commit()
 }
