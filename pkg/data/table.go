@@ -294,6 +294,7 @@ RecordsLoop:
 				continue RecordsLoop
 			}
 		}
+
 		matchedRecords = append(matchedRecords, record)
 	}
 
