@@ -119,6 +119,7 @@ func (t *Table) ResetAndLoadIndexes() error {
 			}
 		}
 	}
+
 	return nil
 }
 
