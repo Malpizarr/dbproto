@@ -126,7 +126,18 @@ func match(record *dbdata.Record, filters map[string]interface{}) bool {
 	return true
 }
 
-// Query performs a query on the table and returns the resulting records.
+// Query is a method of the Table struct that performs a query on the table and returns the resulting records.
+// It first generates an execution plan for the given query.
+// The execution plan includes the best index to use for the query, the filters to apply, the field to sort by, and the limit and offset for the results.
+// It then executes the execution plan, searching for records that match the filters, sorting the results, and applying the limit and offset.
+// If an error occurs during the execution of the plan, it returns the error.
+//
+// Parameters:
+// - query: A Query object representing the query to be performed. The Query object includes filters to select specific records, a field to sort the records by, and a limit and offset for the results.
+//
+// Returns:
+// - A slice of pointers to dbdata.Record objects, representing the records that match the query. If no records match the query, it returns an empty slice.
+// - An error, if any error occurs during the query operation. If the operation is successful, the error is nil.
 func (t *Table) Query(query Query) ([]*dbdata.Record, error) {
 	plan := t.generateExecutionPlan(query)
 	return t.executePlan(plan)

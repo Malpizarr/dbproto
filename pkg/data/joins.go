@@ -16,8 +16,25 @@ const (
 	FullOuterJoin
 )
 
-// JoinTables Func to create joins  between two tables it perform one to many join between two tables, based on the key fields provided
-
+// JoinTables is a function that performs a join operation between two tables.
+// It supports different types of joins: inner join, left join, right join, and full outer join.
+// The join operation is based on the key fields provided for each table.
+// The function first resets and loads the indexes for both tables.
+// It then processes the records from the first table, attempting to find matching records in the second table based on the key fields.
+// If a match is found, the records are merged and added to the results.
+// If no match is found and the join type is a left join or full outer join, the record from the first table is added to the results alone.
+// If the join type is a right join or full outer join, the function also processes the records from the second table.
+// For each record in the second table, it checks if a matching record was found in the first table.
+// If no matching record was found, the record from the second table is added to the results alone.
+//
+// Parameters:
+// - t1, t2: Pointers to the first and second Table objects to be joined.
+// - key1, key2: The key fields for the first and second tables, respectively.
+// - joinType: The type of join to be performed, represented as a JoinType value.
+//
+// Returns:
+// - A slice of maps, where each map represents a joined record. The keys in the map are field names and the values are the corresponding field values.
+// - An error, if any error occurs during the join operation. If the operation is successful, the error is nil.
 func JoinTables(t1, t2 *Table, key1, key2 string, joinType JoinType) ([]map[string]interface{}, error) {
 	results := make([]map[string]interface{}, 0)
 
