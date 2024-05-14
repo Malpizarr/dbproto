@@ -39,6 +39,7 @@ func formatProtoValueXML(val *structpb.Value) string {
 	}
 }
 
+// ExportRecordsToXML exports a slice of records to an XML file.
 func ExportRecordsToXML(records []*dbdata.Record, filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {

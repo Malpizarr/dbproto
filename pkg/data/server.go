@@ -11,8 +11,8 @@ import (
 )
 
 type Server struct {
-	sync.RWMutex
-	Databases map[string]*Database
+	sync.RWMutex                      // Mutex to ensure the server is thread safe
+	Databases    map[string]*Database // Map of Databases in the server
 }
 
 func NewServer() *Server {
@@ -21,6 +21,7 @@ func NewServer() *Server {
 	}
 }
 
+// Initialize initializes the server by creating the server directory and loading the databases.
 func (s *Server) Initialize() error {
 	serverDir := getDefaultServerDir()
 	if err := os.MkdirAll(serverDir, 0755); err != nil {
@@ -30,6 +31,7 @@ func (s *Server) Initialize() error {
 	return s.LoadDatabases(serverDir)
 }
 
+// LoadDatabases loads the databases from the server directory.
 func (s *Server) LoadDatabases(serverDir string) error {
 	dbs, err := os.ReadDir(serverDir)
 	if err != nil {
@@ -49,6 +51,7 @@ func (s *Server) LoadDatabases(serverDir string) error {
 	return nil
 }
 
+// getDefaultServerDir returns the default server directory based on the operating system.
 func getDefaultServerDir() string {
 	var baseDir string
 	switch Os := runtime.GOOS; Os {
@@ -66,6 +69,7 @@ func getDefaultServerDir() string {
 	return filepath.Join(baseDir, "DBPROTO", "databases")
 }
 
+// CreateDatabase creates a new database in the server.
 func (s *Server) CreateDatabase(name string) error {
 	s.Lock()
 	defer s.Unlock()
@@ -76,6 +80,7 @@ func (s *Server) CreateDatabase(name string) error {
 	return nil
 }
 
+// ListDatabases returns a list of databases in the server.
 func (s *Server) ListDatabases() []string {
 	s.RLock()
 	defer s.RUnlock()
@@ -86,6 +91,7 @@ func (s *Server) ListDatabases() []string {
 	return databases
 }
 
+// ServeHTTP implements the http.Handler interface for the server.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":

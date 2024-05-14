@@ -21,6 +21,7 @@ func NewUtils() *Utils {
 	}
 }
 
+// Encrypt encrypts the given data using AES encryption.
 func (u *Utils) Encrypt(data []byte) (string, error) {
 	block, err := aes.NewCipher(u.aesKey)
 	if err != nil {
@@ -33,6 +34,7 @@ func (u *Utils) Encrypt(data []byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(cipherText), nil
 }
 
+// Decrypt decrypts the given data using AES encryption.
 func (u *Utils) Decrypt(data string) ([]byte, error) {
 	cipherText, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {

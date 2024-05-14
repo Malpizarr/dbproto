@@ -15,9 +15,9 @@ type DatabaseReader interface {
 }
 
 type Database struct {
-	sync.RWMutex
-	Name   string
-	Tables map[string]*Table
+	sync.RWMutex                   // Mutex to ensure the database is thread safe
+	Name         string            // Name of the database
+	Tables       map[string]*Table // Map of Tables in the database
 }
 
 func NewDatabase(name string) *Database {
@@ -27,6 +27,7 @@ func NewDatabase(name string) *Database {
 	}
 }
 
+// CreateTable creates a new table in the database.
 func (db *Database) CreateTable(tableName, primaryKey string) error {
 	db.Lock()
 	defer db.Unlock()
@@ -52,6 +53,7 @@ func (db *Database) CreateTable(tableName, primaryKey string) error {
 	return nil
 }
 
+// LoadTables loads the tables from the database directory.
 func (db *Database) LoadTables(dbDir string) error {
 	files, err := os.ReadDir(dbDir)
 	if err != nil {
@@ -75,6 +77,7 @@ func (db *Database) LoadTables(dbDir string) error {
 	return nil
 }
 
+// ListTables returns a list of tables in the database.
 func (db *Database) ListTables() ([]string, error) {
 	db.RLock()
 	defer db.RUnlock()

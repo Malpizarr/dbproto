@@ -26,6 +26,7 @@ func formatProtoValueCSV(val *structpb.Value) string {
 	}
 }
 
+// ExportRecordsToCSV exports a slice of records to a CSV file.
 func ExportRecordsToCSV(records []*dbdata.Record, filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {

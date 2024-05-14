@@ -16,7 +16,7 @@ const (
 	FullOuterJoin
 )
 
-// Func to create joins  between two tables it perform one to many join between two tables, based on the key fields provided
+// JoinTables Func to create joins  between two tables it perform one to many join between two tables, based on the key fields provided
 
 func JoinTables(t1, t2 *Table, key1, key2 string, joinType JoinType) ([]map[string]interface{}, error) {
 	results := make([]map[string]interface{}, 0)

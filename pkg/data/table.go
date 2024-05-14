@@ -309,6 +309,8 @@ func (t *Table) readRecordsFromFile() (*dbdata.Records, error) {
 		return nil, fmt.Errorf("proto unmarshal failed: %v", err)
 	}
 
+	t.Records = records.Records
+
 	return &records, nil
 }
 
@@ -333,6 +335,8 @@ func (t *Table) writeRecordsToFile(records *dbdata.Records) error {
 		return fmt.Errorf("error writing to file '%s': %v", t.FilePath, err)
 	}
 	log.Printf("Wrote %d bytes to file %s", n, t.FilePath)
+
+	t.Records = records.Records
 
 	return nil
 }

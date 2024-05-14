@@ -70,7 +70,7 @@ func (t *Table) InsertWithTransaction(record Record) error {
 	return transaction.Commit()
 }
 
-// erforms an update operation within a transaction context
+// UpdateWithTransaction performs an update operation within a transaction context
 func (t *Table) UpdateWithTransaction(key interface{}, updates Record) error {
 	transaction := NewTransaction(t)
 	if err := transaction.Start(); err != nil {
@@ -86,7 +86,7 @@ func (t *Table) UpdateWithTransaction(key interface{}, updates Record) error {
 	return transaction.Commit()
 }
 
-// performs a delete operation within a transaction context.
+// DeleteWithTransaction performs a delete operation within a transaction context.
 func (t *Table) DeleteWithTransaction(key interface{}) error {
 	transaction := NewTransaction(t)
 	if err := transaction.Start(); err != nil {
