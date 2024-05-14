@@ -8,7 +8,8 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// Query represents a query that can be executed on the database.
+// The Query functionality allows you to perform complex queries on your database table.
+// A query can include filters, sorting, limits, and offsets, which help in retrieving specific subsets of data efficiently.
 type Query struct {
 	Filters map[string]interface{} // Filters to select specific records
 	SortBy  string                 // SortBy is a Field to sort the records by

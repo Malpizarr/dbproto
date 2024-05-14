@@ -23,6 +23,7 @@ type TableReader interface {
 	Delete(key string) error
 }
 
+// Table is a struct that represents a table in the database
 type Table struct {
 	sync.RWMutex
 	FilePath   string
@@ -52,6 +53,7 @@ func NewTable(primaryKey, filePath string) *Table {
 	return table
 }
 
+// LoadIndexes loads the indexes from the file
 func (t *Table) LoadIndexes() error {
 	records, err := t.readRecordsFromFile()
 	if err != nil {
@@ -72,6 +74,7 @@ func (t *Table) LoadIndexes() error {
 	return nil
 }
 
+// ResetAndLoadIndexes resets the indexes and reloads them from the file
 func (t *Table) ResetAndLoadIndexes() error {
 	t.Lock()
 	defer t.Unlock()
@@ -93,6 +96,7 @@ func (t *Table) ResetAndLoadIndexes() error {
 	return nil
 }
 
+// initializeFileIfNotExists initializes the file if it doesn't exist
 func (t *Table) initializeFileIfNotExists() error {
 	if _, err := os.Stat(t.FilePath); os.IsNotExist(err) {
 		records := &dbdata.Records{
@@ -105,6 +109,7 @@ func (t *Table) initializeFileIfNotExists() error {
 	return nil
 }
 
+// Insert inserts a record into the table
 func (t *Table) Insert(record Record) error {
 	t.Lock()
 	defer t.Unlock()
@@ -136,6 +141,7 @@ func (t *Table) Insert(record Record) error {
 	return t.writeRecordsToFile(allRecords)
 }
 
+// SelectAll selects all records from the table
 func (t *Table) SelectAll() ([]*dbdata.Record, error) {
 	t.RLock()
 	defer t.RUnlock()
@@ -150,6 +156,7 @@ func (t *Table) SelectAll() ([]*dbdata.Record, error) {
 	return allRecords, nil
 }
 
+// Equal checks if two structpb.Value are equal
 func Equal(value1, value2 *structpb.Value) bool {
 	if value1.GetKind() == nil || value2.GetKind() == nil {
 		return false
@@ -172,6 +179,7 @@ func Equal(value1, value2 *structpb.Value) bool {
 	}
 }
 
+// SelectWithFilter selects records from the table based on the given filters
 func (t *Table) SelectWithFilter(filters map[string]interface{}) ([]*dbdata.Record, error) {
 	t.RLock()
 	defer t.RUnlock()
@@ -201,6 +209,7 @@ RecordsLoop:
 	return matchedRecords, nil
 }
 
+// Select selects a record from the table based on the given key
 func (t *Table) Select(key interface{}) (*dbdata.Record, error) {
 	t.RLock()
 	defer t.RUnlock()
@@ -219,6 +228,7 @@ func (t *Table) Select(key interface{}) (*dbdata.Record, error) {
 	return record, nil
 }
 
+// Update updates a record in the table based on the given key
 func (t *Table) Update(key interface{}, updates Record) error {
 	t.Lock()
 	defer t.Unlock()
@@ -255,6 +265,7 @@ func (t *Table) Update(key interface{}, updates Record) error {
 	return t.writeRecordsToFile(allRecords)
 }
 
+// Delete deletes a record from the table based on the given key
 func (t *Table) Delete(key interface{}) error {
 	t.Lock()
 	defer t.Unlock()
@@ -286,6 +297,7 @@ func (t *Table) Delete(key interface{}) error {
 	return t.writeRecordsToFile(allRecords)
 }
 
+// readRecordsFromFile reads the records from the file
 func (t *Table) readRecordsFromFile() (*dbdata.Records, error) {
 	encryptedData, err := os.ReadFile(t.FilePath)
 	if err != nil {
@@ -314,6 +326,7 @@ func (t *Table) readRecordsFromFile() (*dbdata.Records, error) {
 	return &records, nil
 }
 
+// writeRecordsToFile writes the records to the file
 func (t *Table) writeRecordsToFile(records *dbdata.Records) error {
 	data, err := proto.Marshal(records)
 	if err != nil {
