@@ -102,7 +102,7 @@ func (db *Database) LoadTables(dbDir string) error {
 	return nil
 }
 
-// ListTables returns a list of tables in the database.
+// ListTables returns a list of tables in the database
 func (db *Database) ListTables() ([]string, error) {
 	db.RLock()
 	defer db.RUnlock()
