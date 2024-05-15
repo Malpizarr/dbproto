@@ -1,6 +1,7 @@
 package data
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -38,6 +39,7 @@ func (db *Database) CreateTable(tableName, primaryKey string) error {
 	serverDir := getDefaultServerDir()
 	dbDir := filepath.Join(serverDir, db.Name)
 	filePath := filepath.Join(dbDir, tableName+".dat")
+	metaFilePath := filepath.Join(dbDir, tableName+".meta")
 
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		return fmt.Errorf("failed to create database directory: %v", err)
@@ -45,6 +47,16 @@ func (db *Database) CreateTable(tableName, primaryKey string) error {
 
 	table := NewTable(primaryKey, filePath)
 	db.Tables[tableName] = table
+
+	// Save the primary key in a metadata file
+	metaData := map[string]string{"PrimaryKey": primaryKey}
+	metaDataBytes, err := json.Marshal(metaData)
+	if err != nil {
+		return fmt.Errorf("failed to serialize metadata: %v", err)
+	}
+	if err := os.WriteFile(metaFilePath, metaDataBytes, 0644); err != nil {
+		return fmt.Errorf("failed to write metadata file: %v", err)
+	}
 
 	if _, err := os.Create(filePath); err != nil {
 		return fmt.Errorf("failed to create initial file for table '%s': %v", tableName, err)
@@ -64,7 +76,20 @@ func (db *Database) LoadTables(dbDir string) error {
 		if !fileInfo.IsDir() && strings.HasSuffix(fileInfo.Name(), ".dat") {
 			tableName := strings.TrimSuffix(fileInfo.Name(), ".dat")
 			tablePath := filepath.Join(dbDir, fileInfo.Name())
-			table := NewTable("", tablePath)
+
+			// Load the primary key from the metadata file
+			metaFilePath := filepath.Join(dbDir, tableName+".meta")
+			metaDataBytes, err := os.ReadFile(metaFilePath)
+			if err != nil {
+				return fmt.Errorf("failed to read metadata file for table %s: %v", tableName, err)
+			}
+			var metaData map[string]string
+			if err := json.Unmarshal(metaDataBytes, &metaData); err != nil {
+				return fmt.Errorf("failed to deserialize metadata for table %s: %v", tableName, err)
+			}
+			primaryKey := metaData["PrimaryKey"]
+
+			table := NewTable(primaryKey, tablePath)
 			records, err := table.readRecordsFromFile()
 			if err != nil {
 				return fmt.Errorf("failed to load table %s: %v", tableName, err)

@@ -73,7 +73,11 @@ func ListDatabasesHandler(server *data.Server) http.HandlerFunc {
 			return
 		}
 		databases := server.ListDatabases()
-		json.NewEncoder(w).Encode(databases)
+		err := json.NewEncoder(w).Encode(databases)
+		if err != nil {
+			http.Error(w, "Failed to serialize response", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -136,7 +140,11 @@ func TableActionHandler(server *data.Server) http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			json.NewEncoder(w).Encode(records)
+			err = json.NewEncoder(w).Encode(records)
+			if err != nil {
+				http.Error(w, "Failed to serialize response", http.StatusInternalServerError)
+				return
+			}
 			return
 		default:
 			http.Error(w, "Invalid action", http.StatusBadRequest)

@@ -177,9 +177,18 @@ func (t *Table) Insert(record Record) error {
 	}
 
 	// Generate primary key value from record
-	primaryKeyValue := fmt.Sprintf("%v", record[t.PrimaryKey])
-	if _, exists := allRecords.Records[primaryKeyValue]; exists {
-		return fmt.Errorf("record with primary key %s already exists", primaryKeyValue)
+	primaryKeyValue, ok := record[t.PrimaryKey]
+	if !ok {
+		return fmt.Errorf("primary key '%s' not found in record", t.PrimaryKey)
+	}
+
+	primaryKeyString := fmt.Sprintf("%v", primaryKeyValue)
+	if primaryKeyString == "<nil>" || primaryKeyString == "" {
+		return fmt.Errorf("primary key '%s' is nil or empty", t.PrimaryKey)
+	}
+
+	if _, exists := allRecords.Records[primaryKeyString]; exists {
+		return fmt.Errorf("record with primary key '%s' already exists", primaryKeyString)
 	}
 
 	// Create new record for storage
@@ -187,7 +196,7 @@ func (t *Table) Insert(record Record) error {
 	for key, value := range record {
 		protoValue, err := structpb.NewValue(value)
 		if err != nil {
-			return fmt.Errorf("invalid value type for field %s: %v", key, err)
+			return fmt.Errorf("invalid value type for field '%s': %v", key, err)
 		}
 		protoRecord.Fields[key] = protoValue
 
@@ -199,7 +208,7 @@ func (t *Table) Insert(record Record) error {
 	}
 
 	// Store the new record in the main records map
-	allRecords.Records[primaryKeyValue] = protoRecord
+	allRecords.Records[primaryKeyString] = protoRecord
 
 	// Write updated records back to file
 	return t.writeRecordsToFile(allRecords)
@@ -491,7 +500,12 @@ func (t *Table) writeRecordsToFile(records *dbdata.Records) error {
 	if err != nil {
 		return fmt.Errorf("error opening file '%s': %v", t.FilePath, err)
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+
+		}
+	}(file)
 
 	n, err := file.Write([]byte(encryptedData))
 	if err != nil {
