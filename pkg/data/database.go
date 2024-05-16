@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -28,8 +29,37 @@ func NewDatabase(name string) *Database {
 	}
 }
 
-// CreateTable creates a new table in the database.
+func ValidFilename(name string) bool {
+	validName := regexp.MustCompile(`^[a-zA-Z0-9-_]+$`).MatchString
+	return validName(name)
+}
+
+// CreateTable is a method of the Database struct that creates a new table in the database.
+// It takes a table name and a primary key as arguments.
+// The table name and primary key must match the regex `^[a-zA-Z0-9-_]+$`, meaning they can only contain
+// alphanumeric characters, hyphens, and underscores. They cannot contain spaces, punctuation (except for hyphens and underscores),
+// or special characters.
+// It first checks if the table name and the primary key are valid using the ValidFilename function.
+// If either the table name or the primary key is not valid, it returns an error.
+// It then acquires a lock on the Database struct and defers the unlocking of the lock.
+// It checks if a table with the same name already exists in the database.
+// If a table with the same name already exists, it returns an error.
+// It then creates the database directory if it does not exist.
+// If there is an error creating the database directory, the error is returned.
+// It creates a new Table instance with the primary key and the file path of the table.
+// It adds the table to the Tables field of the Database struct.
+// It then saves the primary key in a metadata file.
+// If there is an error serializing the metadata or writing the metadata file, the error is returned.
+// It then creates the initial file for the table.
+// If there is an error creating the initial file, the error is returned.
+// If the table is successfully created, the method returns nil.
 func (db *Database) CreateTable(tableName, primaryKey string) error {
+	if !ValidFilename(tableName) {
+		return fmt.Errorf("invalid table name: %s", tableName)
+	}
+	if !ValidFilename(primaryKey) {
+		return fmt.Errorf("invalid primary key: %s", primaryKey)
+	}
 	db.Lock()
 	defer db.Unlock()
 	if _, exists := db.Tables[tableName]; exists {

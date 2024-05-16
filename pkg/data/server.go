@@ -17,13 +17,24 @@ type Server struct {
 	Databases    map[string]*Database // Map of Databases in the server
 }
 
+// NewServer creates a new Server instance.
+// It initializes the Databases field as an empty map where the key is a string representing the database name
+// and the value is a pointer to a Database instance.
+// It returns a pointer to the newly created Server instance.
 func NewServer() *Server {
 	return &Server{
 		Databases: make(map[string]*Database),
 	}
 }
 
-// Initialize initializes the server by creating the server directory and loading the databases.
+// Initialize is a method of the Server struct that initializes the server.
+// It creates the server directory and loads the databases.
+// The server directory is determined by the getDefaultServerDir function.
+// If the server directory does not exist, it is created with read, write, and execute permissions for the user only.
+// If there is an error creating the server directory, the error is returned.
+// After the server directory is successfully created or if it already exists, the databases are loaded using the LoadDatabases method.
+// If there is an error loading the databases, the error is returned.
+// If the server directory is successfully created and the databases are successfully loaded, the method returns nil.
 func (s *Server) Initialize() error {
 	serverDir := getDefaultServerDir()
 	if err := os.MkdirAll(serverDir, 0755); err != nil {
@@ -33,7 +44,14 @@ func (s *Server) Initialize() error {
 	return s.LoadDatabases()
 }
 
-// LoadDatabases loads the databases from the server directory.
+// LoadDatabases is a method of the Server struct that loads the databases from the server directory.
+// It reads the server directory using the os.ReadDir function and the getDefaultServerDir function.
+// If there is an error reading the server directory, the error is returned.
+// For each directory in the server directory, it creates a new Database instance with the directory name as the database name.
+// It then loads the tables from the database directory using the LoadTables method of the Database struct.
+// If there is an error loading the tables, the error is returned.
+// If the tables are successfully loaded, the database is added to the Databases field of the Server struct.
+// If all databases are successfully loaded, the method returns nil.
 func (s *Server) LoadDatabases() error {
 	dbs, err := os.ReadDir(getDefaultServerDir())
 	if err != nil {
@@ -111,7 +129,21 @@ func (s *Server) ListDatabases() []string {
 	return databases
 }
 
-// BackupDatabases creates a backup of all databases in the server.
+// BackupDatabases is a method of the Server struct that creates a backup of all databases in the server.
+// It returns the path to the backup file and an error if there is one.
+//
+// The method works as follows:
+//  1. It acquires a read lock on the Server struct and defers the unlocking of the lock.
+//  2. It creates a backup directory in the default backup directory. The default backup directory is determined by the getDefaultBackUpDir function.
+//     If there is an error creating the backup directory, the error is returned.
+//  3. It creates a backup file in the backup directory. The backup file is a zip file named "backup.zip".
+//     If there is an error creating the backup file, the error is returned.
+//  4. It creates a new zip writer for the backup file and defers the closing of the zip writer.
+//  5. It iterates over each database in the Databases field of the Server struct.
+//     For each database, it walks the database directory and adds each file to the zip file.
+//     The database directory is determined by the getDefaultServerDir function and the database name.
+//     If there is an error walking the database directory or adding a file to the zip file, the error is returned.
+//  6. If all databases are successfully backed up, the method returns the path to the backup file and nil.
 func (s *Server) BackupDatabases() (string, error) {
 	s.RLock()
 	defer s.RUnlock()
@@ -172,7 +204,24 @@ func (s *Server) BackupDatabases() (string, error) {
 	return backupPath, nil
 }
 
-// RestoreDatabases restores databases from the latest backup file.
+// RestoreDatabases is a method of the Server struct that restores databases from the latest backup file.
+// It acquires a lock on the Server struct and defers the unlocking of the lock.
+// It opens the latest backup file in the default backup directory. The default backup directory is determined by the getDefaultBackUpDir function.
+// If there is an error opening the backup file, the error is returned.
+// It gets the file stat of the backup file. If there is an error getting the file stat, the error is returned.
+// It creates a new zip reader for the backup file. If there is an error creating the zip reader, the error is returned.
+// It iterates over each file in the zip file.
+// For each file, it creates the file path by joining the default server directory and the file name.
+// The default server directory is determined by the getDefaultServerDir function.
+// If the file is a directory, it creates the directory with read, write, and execute permissions for the user only.
+// If the file is a regular file, it creates the file with the same permissions as in the zip file.
+// It opens the file for writing. If there is an error opening the file, the error is returned.
+// It opens the zip file for reading. If there is an error opening the zip file, the error is returned.
+// It copies the contents of the zip file to the file. If there is an error copying the contents, the error is returned.
+// It closes the file and the zip file.
+// After all files are successfully restored, it loads the databases using the LoadDatabases method of the Server struct.
+// If there is an error loading the databases, the error is returned.
+// If all databases are successfully loaded, the method returns nil.
 func (s *Server) RestoreDatabases() error {
 	s.Lock()
 	defer s.Unlock()
