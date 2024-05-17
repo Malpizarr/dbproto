@@ -86,12 +86,6 @@ Install dependencies:
 
     go get .
 
-# Configuration
-
-Set up the required environment variables. Create a .env file in the root of your project and specify the following variables:
-
-    AES_KEY: A 32-byte key used for AES encryption.
-
 # Building the Project
 
 Navigate to the project directory:
@@ -104,7 +98,11 @@ Compile the project using:
 
 # Using the package
 
-This package provides a simple server for database operations, including table creation, data encryption/decryption, and basic CRUD operations on records. The server listens for HTTP requests and responds with JSON payloads. The server uses environment variables for configuration and Protobuf for data serialization.
+This project is designed to be used as a package in other projects.
+
+For installation, use the go get command:
+
+    go get github.com/Malpizarr/dbproto
 
 For usage in your project, import the following packages:
 
@@ -112,35 +110,31 @@ For usage in your project, import the following packages:
     github.com/Malpizarr/dbproto/pkg/api
     github.com/Malpizarr/dbproto/pkg/utils
 
-# Running the Server
+#### For better understanding on the usage of the package in other projects, an example can be found on [here](https://github.com/Malpizarr/dbprototests?tab=readme-ov-file).
 
-Start the server by executing the compiled binary:
+# Running the CMD
+
+Navigate to the cmd/dbproto directory:
+
+    cd cmd/dbproto
+
+Run the compiled binary:
 
     ./dbproto
 
-This starts the server on localhost:8080. The server logs will indicate that it is running and listening for requests.
+### How to use the CMD
 
-# API Overview
+The CMD prvodes a CLI interface in order to see the information on the databases and tables, and to export the data to a file.
 
-Database Operations
+The following commands are available:
 
-    Create Database: POST /createDatabase
-        Requires a JSON payload with the database name.
-    List Databases: GET /listDatabases
-        Returns a list of all databases.
+    list: Lists all databases.
+        list [database]: Lists the tables on a database.
+        list [database] [table]: Lists all the information on the table.
 
-Table Operations
+    export: Exports the data from a table to a file.
+        export [database] [table] [filename] --format=[csv|xml]: Exports the data from a table to a file.
 
-    Create Table: POST /createTable?dbName=<database_name>
-    Requires a JSON payload with the table name and primary key.
-
-    Table Actions: POST /tableAction?dbName=<database_name>
-    Requires a JSON payload with the action (insert, update, delete, selectAll), table name, and record data.
-
-Join Operation
-
-    Join Tables: POST /joinTables?dbName=<database_name>
-    Requires a JSON payload with the table names, join keys, and join type (innerJoin, leftJoin, rightJoin, fullOuterJoin).
 
 # Encryption Utilities
 
@@ -160,18 +154,4 @@ Defines records and record collections for serialization:
 
 The data package includes a transaction mechanism for performing CRUD operations on tables. The Transaction struct stores the original records before any changes, and the provided methods (InsertWithTransaction, UpdateWithTransaction, DeleteWithTransaction) ensure that either all changes are committed or rolled back, maintaining data consistency.
 
-```
 
-```
-
-```
-
-```
-
-```
-
-```
-
-```
-
-```
