@@ -310,3 +310,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unsupported method", http.StatusMethodNotAllowed)
 	}
 }
+
+func (s *Server) GetMetrics() map[string]string {
+	s.RLock()
+	defer s.RUnlock()
+
+	metrics := make(map[string]string)
+	for dbName, db := range s.Databases {
+		db.RLock()
+		for tableName, table := range db.Tables {
+			metrics[dbName+"_"+tableName] = table.metrics.String()
+		}
+		db.RUnlock()
+	}
+	return metrics
+}

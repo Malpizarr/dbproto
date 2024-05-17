@@ -16,13 +16,6 @@ import (
 
 type Record map[string]interface{}
 
-type TableReader interface {
-	Select(key string) (Record, error)
-	Insert(record Record) error
-	Update(key string, record Record) error
-	Delete(key string) error
-}
-
 // Table is a struct that represents a table in the database.
 // It includes a mutex for read-write locking to ensure thread safety during operations.
 // FilePath is the path to the file where the table data is stored.
@@ -37,6 +30,8 @@ type Table struct {
 	utils        *utils.Utils                // Utility object used for various helper functions
 	Indexes      map[string][]*dbdata.Record // Map of field names to slices of records that have that field
 	Records      map[string]*dbdata.Record   // Map of primary key values to the corresponding records
+	Cache        map[string]*dbdata.Record   // Cache for recently accessed records
+	metrics      *Metrics                    // Metrics for monitoring
 }
 
 // NewTable is a constructor function for the Table struct.
@@ -71,11 +66,16 @@ func NewTable(primaryKey, filePath string) *Table {
 		utils:      utils.NewUtils(),
 		Records:    make(map[string]*dbdata.Record),
 		Indexes:    make(map[string][]*dbdata.Record),
+		Cache:      make(map[string]*dbdata.Record),
+		metrics:    NewMetrics(),
 	}
 	if err := table.initializeFileIfNotExists(); err != nil {
 		log.Fatalf("Failed to initialize file %s: %v", filePath, err)
 	}
-	table.LoadIndexes()
+	err := table.LoadIndexes()
+	if err != nil {
+		log.Fatalf("Failed to load indexes: %v", err)
+	}
 	return table
 }
 
@@ -161,22 +161,20 @@ func (t *Table) initializeFileIfNotExists() error {
 // Returns:
 // - If the operation is successful, it returns nil.
 // - If an error occurs, it returns the error.
+
 func (t *Table) Insert(record Record) error {
 	t.Lock()
 	defer t.Unlock()
 
-	// Make sure all structures are initialized
 	if t.Indexes == nil {
 		t.Indexes = make(map[string][]*dbdata.Record)
 	}
 
-	// Load or initialize records from file
 	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
 		return err
 	}
 
-	// Generate primary key value from record
 	primaryKeyValue, ok := record[t.PrimaryKey]
 	if !ok {
 		return fmt.Errorf("primary key '%s' not found in record", t.PrimaryKey)
@@ -191,7 +189,6 @@ func (t *Table) Insert(record Record) error {
 		return fmt.Errorf("record with primary key '%s' already exists", primaryKeyString)
 	}
 
-	// Create new record for storage
 	protoRecord := &dbdata.Record{Fields: make(map[string]*structpb.Value)}
 	for key, value := range record {
 		protoValue, err := structpb.NewValue(value)
@@ -200,17 +197,16 @@ func (t *Table) Insert(record Record) error {
 		}
 		protoRecord.Fields[key] = protoValue
 
-		// Ensure the slice for the key is initialized before use
 		if _, exists := t.Indexes[key]; !exists {
 			t.Indexes[key] = []*dbdata.Record{}
 		}
 		t.Indexes[key] = append(t.Indexes[key], protoRecord)
 	}
 
-	// Store the new record in the main records map
 	allRecords.Records[primaryKeyString] = protoRecord
+	t.Cache[primaryKeyString] = protoRecord
 
-	// Write updated records back to file
+	t.metrics.IncrementInsertCount()
 	return t.writeRecordsToFile(allRecords)
 }
 
@@ -228,6 +224,7 @@ func (t *Table) Insert(record Record) error {
 func (t *Table) SelectAll() ([]*dbdata.Record, error) {
 	t.RLock()
 	defer t.RUnlock()
+
 	records, err := t.readRecordsFromFile()
 	if err != nil {
 		return nil, err
@@ -236,6 +233,8 @@ func (t *Table) SelectAll() ([]*dbdata.Record, error) {
 	for _, record := range records.GetRecords() {
 		allRecords = append(allRecords, record)
 	}
+
+	t.metrics.IncrementQueryCount()
 	return allRecords, nil
 }
 
@@ -331,6 +330,11 @@ func (t *Table) Select(key interface{}) (*dbdata.Record, error) {
 
 	keyStr := fmt.Sprintf("%v", key)
 
+	if record, exists := t.Cache[keyStr]; exists {
+		t.metrics.IncrementCacheHits()
+		return record, nil
+	}
+
 	records, err := t.readRecordsFromFile()
 	if err != nil {
 		return nil, err
@@ -340,6 +344,10 @@ func (t *Table) Select(key interface{}) (*dbdata.Record, error) {
 	if !exists {
 		return nil, fmt.Errorf("record with key %s not found", keyStr)
 	}
+
+	t.Cache[keyStr] = record
+	t.metrics.IncrementCacheMisses()
+	t.metrics.IncrementQueryCount()
 	return record, nil
 }
 
@@ -375,7 +383,7 @@ func (t *Table) Update(key interface{}, updates Record) error {
 	}
 	existingRecord, exists := allRecords.Records[keyStr]
 	if !exists {
-		return fmt.Errorf("Record with key %s not found", keyStr)
+		return fmt.Errorf("record with key %s not found", keyStr)
 	}
 
 	for field, newValue := range updates {
@@ -397,6 +405,9 @@ func (t *Table) Update(key interface{}, updates Record) error {
 		t.Indexes[field] = append(t.Indexes[field], existingRecord)
 	}
 
+	t.Cache[keyStr] = existingRecord
+
+	t.metrics.IncrementUpdateCount()
 	return t.writeRecordsToFile(allRecords)
 }
 
@@ -427,16 +438,14 @@ func (t *Table) Delete(key interface{}) error {
 		return err
 	}
 
-	// Check if the key exists before attempting to delete
 	record, exists := allRecords.Records[keyStr]
 	if !exists {
-		return fmt.Errorf("Record with key %s not found", keyStr)
+		return fmt.Errorf("record with key %s not found", keyStr)
 	}
 
-	// Remove from main records map
 	delete(allRecords.Records, keyStr)
+	delete(t.Cache, keyStr)
 
-	// Update indexes
 	for field := range record.Fields {
 		idxSlice := t.Indexes[field]
 		for i, rec := range idxSlice {
@@ -445,12 +454,12 @@ func (t *Table) Delete(key interface{}) error {
 				break
 			}
 		}
-		// If the index slice is empty, delete the map entry
 		if len(t.Indexes[field]) == 0 {
 			delete(t.Indexes, field)
 		}
 	}
 
+	t.metrics.IncrementDeleteCount()
 	return t.writeRecordsToFile(allRecords)
 }
 
