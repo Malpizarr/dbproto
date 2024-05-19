@@ -1,6 +1,7 @@
 package data
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -163,6 +164,25 @@ func (t *Table) initializeFileIfNotExists() error {
 // - If an error occurs, it returns the error.
 
 func (t *Table) Insert(record Record) error {
+	primaryKeyValue, ok := record[t.PrimaryKey]
+	if !ok {
+		return fmt.Errorf("primary key '%s' not found in record", t.PrimaryKey)
+	}
+
+	primaryKeyString := fmt.Sprintf("%v", primaryKeyValue)
+	if primaryKeyString == "<nil>" || primaryKeyString == "" {
+		return fmt.Errorf("primary key '%s' is nil or empty", t.PrimaryKey)
+	}
+
+	protoRecord := &dbdata.Record{Fields: make(map[string]*structpb.Value)}
+	for key, value := range record {
+		protoValue, err := structpb.NewValue(value)
+		if err != nil {
+			return fmt.Errorf("invalid value type for field '%s': %v", key, err)
+		}
+		protoRecord.Fields[key] = protoValue
+	}
+
 	t.Lock()
 	defer t.Unlock()
 
@@ -175,28 +195,11 @@ func (t *Table) Insert(record Record) error {
 		return err
 	}
 
-	primaryKeyValue, ok := record[t.PrimaryKey]
-	if !ok {
-		return fmt.Errorf("primary key '%s' not found in record", t.PrimaryKey)
-	}
-
-	primaryKeyString := fmt.Sprintf("%v", primaryKeyValue)
-	if primaryKeyString == "<nil>" || primaryKeyString == "" {
-		return fmt.Errorf("primary key '%s' is nil or empty", t.PrimaryKey)
-	}
-
 	if _, exists := allRecords.Records[primaryKeyString]; exists {
 		return fmt.Errorf("record with primary key '%s' already exists", primaryKeyString)
 	}
 
-	protoRecord := &dbdata.Record{Fields: make(map[string]*structpb.Value)}
-	for key, value := range record {
-		protoValue, err := structpb.NewValue(value)
-		if err != nil {
-			return fmt.Errorf("invalid value type for field '%s': %v", key, err)
-		}
-		protoRecord.Fields[key] = protoValue
-
+	for key := range protoRecord.Fields {
 		if _, exists := t.Indexes[key]; !exists {
 			t.Indexes[key] = []*dbdata.Record{}
 		}
@@ -208,6 +211,122 @@ func (t *Table) Insert(record Record) error {
 
 	t.metrics.IncrementInsertCount()
 	return t.writeRecordsToFile(allRecords)
+}
+
+// InsertMany is a method of the Table struct that inserts multiple new records into the table.
+// It divides the records into batches and inserts each batch separately to optimize performance.
+// If an error occurs while inserting a batch, it is added to a slice of errors.
+// After all batches have been processed, it returns the slice of errors.
+//
+// Parameters:
+// - records: A slice of maps representing the records to be inserted. The keys are field names and the values are the field values.
+//
+// Returns:
+// - A slice of errors for records that failed to insert. If all records are inserted successfully, the slice is empty.
+func (t *Table) InsertMany(records []Record) []error {
+	batchSize := 1000
+	numRecords := len(records)
+	errors := make([]error, 0)
+
+	for i := 0; i < numRecords; i += batchSize {
+		end := i + batchSize
+		if end > numRecords {
+			end = numRecords
+		}
+
+		batch := records[i:end]
+		batchErrors := t.insertBatch(batch)
+		if batchErrors != nil {
+			errors = append(errors, batchErrors...)
+		}
+	}
+
+	return errors
+}
+
+// insertBatch is a helper method of the Table struct that inserts a batch of records into the table.
+// It first validates the records, checking for missing primary keys, nil or empty primary keys, and duplicate primary keys within the batch.
+// It then locks the table for writing, ensuring that no other goroutines can modify the table while the insertion is happening.
+// It reads all existing records from the file where the table data is stored.
+// For each record in the batch, if the primary key already exists in the table, it returns an error for that record but continues with the rest.
+// It then updates the indexes and writes the updated records back to the file.
+// If any error occurs during these operations, it returns the error.
+//
+// Parameters:
+// - records: A slice of maps representing the records to be inserted. The keys are field names and the values are the field values.
+//
+// Returns:
+// - A slice of errors for records that failed to insert. If all records are inserted successfully, the slice is empty.
+func (t *Table) insertBatch(records []Record) []error {
+	protoRecords := make(map[string]*dbdata.Record)
+	errors := make([]error, 0)
+
+	for _, record := range records {
+		primaryKeyValue, ok := record[t.PrimaryKey]
+		if !ok {
+			errors = append(errors, fmt.Errorf("primary key '%s' not found in record", t.PrimaryKey))
+			continue
+		}
+
+		primaryKeyString := fmt.Sprintf("%v", primaryKeyValue)
+		if primaryKeyString == "<nil>" || primaryKeyString == "" {
+			errors = append(errors, fmt.Errorf("primary key '%s' is nil or empty", t.PrimaryKey))
+			continue
+		}
+
+		if _, exists := protoRecords[primaryKeyString]; exists {
+			errors = append(errors, fmt.Errorf("duplicate primary key '%s' in input records", primaryKeyString))
+			continue
+		}
+
+		protoRecord := &dbdata.Record{Fields: make(map[string]*structpb.Value)}
+		for key, value := range record {
+			protoValue, err := structpb.NewValue(value)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("invalid value type for field '%s': %v", key, err))
+				continue
+			}
+			protoRecord.Fields[key] = protoValue
+		}
+
+		protoRecords[primaryKeyString] = protoRecord
+	}
+
+	t.Lock()
+	defer t.Unlock()
+
+	if t.Indexes == nil {
+		t.Indexes = make(map[string][]*dbdata.Record)
+	}
+
+	allRecords, err := t.readRecordsFromFile()
+	if err != nil {
+		return append(errors, err)
+	}
+
+	for primaryKeyString, protoRecord := range protoRecords {
+		if _, exists := allRecords.Records[primaryKeyString]; exists {
+			errors = append(errors, fmt.Errorf("record with primary key '%s' already exists", primaryKeyString))
+			continue
+		}
+
+		for key := range protoRecord.Fields {
+			if _, exists := t.Indexes[key]; !exists {
+				t.Indexes[key] = []*dbdata.Record{}
+			}
+			t.Indexes[key] = append(t.Indexes[key], protoRecord)
+		}
+
+		allRecords.Records[primaryKeyString] = protoRecord
+		t.Cache[primaryKeyString] = protoRecord
+		t.metrics.IncrementInsertCount()
+	}
+
+	if err := t.writeRecordsToFile(allRecords); err != nil {
+		return append(errors, err)
+	}
+
+	return errors
 }
 
 // SelectAll is a method of the Table struct that selects all records from the table.
@@ -463,6 +582,66 @@ func (t *Table) Delete(key interface{}) error {
 	return t.writeRecordsToFile(allRecords)
 }
 
+// DeleteMany is a method of the Table struct that deletes multiple records from the table based on the given keys.
+// It locks the table for writing, ensuring that no other goroutines can modify the table while the deletion is happening.
+// It first reads all existing records from the file where the table data is stored.
+// For each key, if the primary key of the record to be deleted does not exist in the table, it returns an error for that key but continues with the rest.
+// It then removes the record from the main records map.
+// It also updates the indexes. For each field in the record, it removes the record from the index for that field.
+// If the index for a field becomes empty after the removal of the record, it deletes the index.
+// It then writes the updated records back to the file.
+// If any error occurs during these operations, it returns the error.
+//
+// Parameters:
+// - keys: A slice of interface{} representing the keys of the records to be deleted. The keys are converted to strings before the deletion is performed.
+//
+// Returns:
+// - A slice of errors for keys that failed to delete. If all records are deleted successfully, the slice is empty.
+func (t *Table) DeleteMany(keys []interface{}) []error {
+	t.Lock()
+	defer t.Unlock()
+
+	allRecords, err := t.readRecordsFromFile()
+	if err != nil {
+		return []error{fmt.Errorf("failed to read records from file: %w", err)}
+	}
+
+	var errors []error
+
+	for _, key := range keys {
+		keyStr := fmt.Sprintf("%v", key)
+		record, exists := allRecords.Records[keyStr]
+		if !exists {
+			errors = append(errors, fmt.Errorf("record with key %s not found", keyStr))
+			continue
+		}
+
+		delete(allRecords.Records, keyStr)
+		delete(t.Cache, keyStr)
+
+		for field := range record.Fields {
+			idxSlice := t.Indexes[field]
+			for i, rec := range idxSlice {
+				if recKeyValue, ok := rec.Fields[t.PrimaryKey]; ok && recKeyValue.GetStringValue() == keyStr {
+					t.Indexes[field] = append(idxSlice[:i], idxSlice[i+1:]...)
+					break
+				}
+			}
+			if len(t.Indexes[field]) == 0 {
+				delete(t.Indexes, field)
+			}
+		}
+
+		t.metrics.IncrementDeleteCount()
+	}
+
+	if writeErr := t.writeRecordsToFile(allRecords); writeErr != nil {
+		errors = append(errors, fmt.Errorf("failed to write records to file: %w", writeErr))
+	}
+
+	return errors
+}
+
 // readRecordsFromFile reads the records from the file
 func (t *Table) readRecordsFromFile() (*dbdata.Records, error) {
 	encryptedData, err := os.ReadFile(t.FilePath)
@@ -505,22 +684,21 @@ func (t *Table) writeRecordsToFile(records *dbdata.Records) error {
 		return fmt.Errorf("error encrypting data: %v", err)
 	}
 
+	// Use batch writing with buffer
 	file, err := os.OpenFile(t.FilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return fmt.Errorf("error opening file '%s': %v", t.FilePath, err)
 	}
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
+	defer file.Close()
 
-		}
-	}(file)
-
-	n, err := file.Write([]byte(encryptedData))
+	writer := bufio.NewWriter(file)
+	_, err = writer.Write([]byte(encryptedData))
 	if err != nil {
 		return fmt.Errorf("error writing to file '%s': %v", t.FilePath, err)
 	}
-	log.Printf("Wrote %d bytes to file %s", n, t.FilePath)
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("error flushing writer: %v", err)
+	}
 
 	t.Records = records.Records
 
