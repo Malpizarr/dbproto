@@ -158,10 +158,20 @@ func (s *Server) BackupDatabases() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create backup file: %v", err)
 	}
-	defer backupFile.Close()
+	defer func(backupFile *os.File) {
+		err := backupFile.Close()
+		if err != nil {
+			fmt.Printf("failed to close backup file: %v\n", err)
+		}
+	}(backupFile)
 
 	zipWriter := zip.NewWriter(backupFile)
-	defer zipWriter.Close()
+	defer func(zipWriter *zip.Writer) {
+		err := zipWriter.Close()
+		if err != nil {
+			fmt.Printf("failed to close zip writer: %v\n", err)
+		}
+	}(zipWriter)
 
 	for dbName := range s.Databases {
 		dbDir := filepath.Join(getDefaultServerDir(), dbName)
@@ -187,7 +197,12 @@ func (s *Server) BackupDatabases() (string, error) {
 			if err != nil {
 				return err
 			}
-			defer file.Close()
+			defer func(file *os.File) {
+				err := file.Close()
+				if err != nil {
+					fmt.Printf("failed to close file: %v\n", err)
+				}
+			}(file)
 
 			_, err = io.Copy(zipFile, file)
 			if err != nil {
@@ -206,7 +221,8 @@ func (s *Server) BackupDatabases() (string, error) {
 
 // RestoreDatabases is a method of the Server struct that restores databases from the latest backup file.
 // It acquires a lock on the Server struct and defers the unlocking of the lock.
-// It opens the latest backup file in the default backup directory. The default backup directory is determined by the getDefaultBackUpDir function.
+// It opens the latest backup file in the default backup directory. The default backup directory is determined by the getDefaultBackUpDir if
+// the backup Path is empty, if there's not, the route will be checked.
 // If there is an error opening the backup file, the error is returned.
 // It gets the file stat of the backup file. If there is an error getting the file stat, the error is returned.
 // It creates a new zip reader for the backup file. If there is an error creating the zip reader, the error is returned.
@@ -222,16 +238,27 @@ func (s *Server) BackupDatabases() (string, error) {
 // After all files are successfully restored, it loads the databases using the LoadDatabases method of the Server struct.
 // If there is an error loading the databases, the error is returned.
 // If all databases are successfully loaded, the method returns nil.
-func (s *Server) RestoreDatabases() error {
+func (s *Server) RestoreDatabases(backupPath ...string) error {
 	s.Lock()
 	defer s.Unlock()
 
-	backupPath := filepath.Join(getDefaultBackUpDir(), "backups", "backup.zip")
-	backupFile, err := os.Open(backupPath)
+	var path string
+	if len(backupPath) > 0 {
+		path = backupPath[0]
+	} else {
+		path = filepath.Join(getDefaultBackUpDir(), "backups", "backup.zip")
+	}
+
+	backupFile, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("failed to open backup file: %v", err)
 	}
-	defer backupFile.Close()
+	defer func(backupFile *os.File) {
+		err := backupFile.Close()
+		if err != nil {
+			fmt.Printf("failed to close backup file: %v\n", err)
+		}
+	}(backupFile)
 
 	stat, err := backupFile.Stat()
 	if err != nil {
@@ -247,11 +274,17 @@ func (s *Server) RestoreDatabases() error {
 		filePath := filepath.Join(getDefaultServerDir(), file.Name)
 
 		if file.FileInfo().IsDir() {
-			os.MkdirAll(filePath, 0755)
+			err := os.MkdirAll(filePath, 0755)
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
-		os.MkdirAll(filepath.Dir(filePath), 0755)
+		err := os.MkdirAll(filepath.Dir(filePath), 0755)
+		if err != nil {
+			return err
+		}
 
 		outFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
 		if err != nil {
@@ -268,8 +301,14 @@ func (s *Server) RestoreDatabases() error {
 			return fmt.Errorf("failed to write file: %v", err)
 		}
 
-		outFile.Close()
-		rc.Close()
+		err = outFile.Close()
+		if err != nil {
+			return err
+		}
+		err = rc.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	return s.LoadDatabases()
