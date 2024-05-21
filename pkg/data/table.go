@@ -344,15 +344,25 @@ func (t *Table) SelectAll() ([]*dbdata.Record, error) {
 	t.RLock()
 	defer t.RUnlock()
 
-	records, err := t.readRecordsFromFile()
-	if err != nil {
-		return nil, err
-	}
-	var allRecords []*dbdata.Record
-	for _, record := range records.GetRecords() {
-		allRecords = append(allRecords, record)
+	index, exists := t.Indexes[t.PrimaryKey]
+	if !exists {
+
+		records, err := t.readRecordsFromFile()
+		if err != nil {
+			return nil, err
+		}
+		var allRecords []*dbdata.Record
+		for _, record := range records.GetRecords() {
+			allRecords = append(allRecords, record)
+		}
+		t.metrics.IncrementQueryCount()
+		return allRecords, nil
 	}
 
+	var allRecords []*dbdata.Record
+	for _, record := range index {
+		allRecords = append(allRecords, record)
+	}
 	t.metrics.IncrementQueryCount()
 	return allRecords, nil
 }
@@ -528,6 +538,74 @@ func (t *Table) Update(key interface{}, updates Record) error {
 
 	t.metrics.IncrementUpdateCount()
 	return t.writeRecordsToFile(allRecords)
+}
+
+// UpdateMany is a method of the Table struct that updates multiple records in the table based on the given keys and updates.
+// It locks the table for writing, ensuring that no other goroutines can modify the table while the updates are happening.
+// It first reads all existing records from the file where the table data is stored.
+// For each key, if the primary key of the record to be updated does not exist in the table, it returns an error for that key but continues with the rest.
+// It then iterates over the fields in the updates map, updating each field in the existing record.
+// For each field, it checks if the field exists in the existing record.
+// If the field exists, it removes the existing record from the index for that field.
+// It then converts the new field value to a proto Value and updates the field in the existing record.
+// If an error occurs during this conversion, it returns an error for that record but continues with the rest.
+// It then adds the updated record to the index for the field.
+// If the index for the field does not exist, it initializes it before adding the updated record.
+// It then writes the updated records back to the file.
+// If any error occurs during these operations, it returns an error for that record but continues with the rest.
+//
+// Parameters:
+// - updates: A map where the keys are the primary key values and the values are the updates to be applied to the records. Each value is a map representing the fields to be updated.
+//
+// Returns:
+// - A slice of errors for records that failed to update. If all records are updated successfully, the slice is empty.
+func (t *Table) UpdateMany(updates map[string]Record) []error {
+	t.Lock()
+	defer t.Unlock()
+
+	allRecords, err := t.readRecordsFromFile()
+	if err != nil {
+		return []error{fmt.Errorf("failed to read records from file: %w", err)}
+	}
+
+	var errors []error
+
+	for keyStr, updateFields := range updates {
+		existingRecord, exists := allRecords.Records[keyStr]
+		if !exists {
+			errors = append(errors, fmt.Errorf("record with key %s not found", keyStr))
+			continue
+		}
+
+		for field, newValue := range updateFields {
+			oldVal := existingRecord.Fields[field]
+			if oldVal != nil {
+				newIdxMap := make([]*dbdata.Record, 0)
+				for _, r := range t.Indexes[field] {
+					if r.Fields[field] != oldVal {
+						newIdxMap = append(newIdxMap, r)
+					}
+				}
+				t.Indexes[field] = newIdxMap
+			}
+			newVal, err := structpb.NewValue(newValue)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("error converting newValue for field %s in record with key %s: %v", field, keyStr, err))
+				continue
+			}
+			existingRecord.Fields[field] = newVal
+			t.Indexes[field] = append(t.Indexes[field], existingRecord)
+		}
+
+		t.Cache[keyStr] = existingRecord
+		t.metrics.IncrementUpdateCount()
+	}
+
+	if writeErr := t.writeRecordsToFile(allRecords); writeErr != nil {
+		return append(errors, fmt.Errorf("failed to write records to file: %w", writeErr))
+	}
+
+	return errors
 }
 
 // Delete is a method of the Table struct that deletes a record from the table based on the given key.

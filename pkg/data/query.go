@@ -48,7 +48,6 @@ func (t *Table) selectBestIndex(query Query) string {
 // generateExecutionPlan generates an execution plan for a given query.
 func (t *Table) generateExecutionPlan(query Query) ExecutionPlan {
 	bestIndex := t.selectBestIndex(query)
-	fmt.Printf("Selected best index: %s\n", bestIndex)
 	return ExecutionPlan{
 		IndexToUse: bestIndex,
 		Filters:    query.Filters,
@@ -119,7 +118,6 @@ func match(record *dbdata.Record, filters map[string]interface{}) bool {
 			return false
 		}
 		if !Equal(recordValue, protoValue) {
-			fmt.Printf("Field %s does not match. Expected: %v, Got: %v\n", field, protoValue, recordValue)
 			return false
 		}
 	}
