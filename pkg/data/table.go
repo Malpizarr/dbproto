@@ -61,10 +61,15 @@ func NewTable(primaryKey, filePath string) *Table {
 			log.Fatalf("Failed to create directory %s: %v", dir, err)
 		}
 	}
+
+	utils, err := utils.NewUtils()
+	if err != nil {
+		log.Fatalf("Failed to create utils: %v", err)
+	}
 	table := &Table{
 		FilePath:   filePath,
 		PrimaryKey: primaryKey,
-		utils:      utils.NewUtils(),
+		utils:      utils,
 		Records:    make(map[string]*dbdata.Record),
 		Indexes:    make(map[string][]*dbdata.Record),
 		Cache:      make(map[string]*dbdata.Record),
@@ -73,7 +78,7 @@ func NewTable(primaryKey, filePath string) *Table {
 	if err := table.initializeFileIfNotExists(); err != nil {
 		log.Fatalf("Failed to initialize file %s: %v", filePath, err)
 	}
-	err := table.LoadIndexes()
+	err = table.LoadIndexes()
 	if err != nil {
 		log.Fatalf("Failed to load indexes: %v", err)
 	}
