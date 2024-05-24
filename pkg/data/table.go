@@ -228,110 +228,49 @@ func (t *Table) Insert(record Record) error {
 //
 // Returns:
 // - A slice of errors for records that failed to insert. If all records are inserted successfully, the slice is empty.
-func (t *Table) InsertMany(records []Record) []error {
-	batchSize := 1000
-	numRecords := len(records)
-	errors := make([]error, 0)
+func (t *Table) InsertMany(records []Record) error {
+	t.Lock()
+	defer t.Unlock()
 
-	for i := 0; i < numRecords; i += batchSize {
-		end := i + batchSize
-		if end > numRecords {
-			end = numRecords
-		}
-
-		batch := records[i:end]
-		batchErrors := t.insertBatch(batch)
-		if batchErrors != nil {
-			errors = append(errors, batchErrors...)
-		}
+	allRecords, err := t.readRecordsFromFile()
+	if err != nil {
+		return err
 	}
-
-	return errors
-}
-
-// insertBatch is a helper method of the Table struct that inserts a batch of records into the table.
-// It first validates the records, checking for missing primary keys, nil or empty primary keys, and duplicate primary keys within the batch.
-// It then locks the table for writing, ensuring that no other goroutines can modify the table while the insertion is happening.
-// It reads all existing records from the file where the table data is stored.
-// For each record in the batch, if the primary key already exists in the table, it returns an error for that record but continues with the rest.
-// It then updates the indexes and writes the updated records back to the file.
-// If any error occurs during these operations, it returns the error.
-//
-// Parameters:
-// - records: A slice of maps representing the records to be inserted. The keys are field names and the values are the field values.
-//
-// Returns:
-// - A slice of errors for records that failed to insert. If all records are inserted successfully, the slice is empty.
-func (t *Table) insertBatch(records []Record) []error {
-	protoRecords := make(map[string]*dbdata.Record)
-	errors := make([]error, 0)
 
 	for _, record := range records {
 		primaryKeyValue, ok := record[t.PrimaryKey]
 		if !ok {
-			errors = append(errors, fmt.Errorf("primary key '%s' not found in record", t.PrimaryKey))
-			continue
+			return fmt.Errorf("primary key '%s' not found in record", t.PrimaryKey)
 		}
 
 		primaryKeyString := fmt.Sprintf("%v", primaryKeyValue)
 		if primaryKeyString == "<nil>" || primaryKeyString == "" {
-			errors = append(errors, fmt.Errorf("primary key '%s' is nil or empty", t.PrimaryKey))
-			continue
-		}
-
-		if _, exists := protoRecords[primaryKeyString]; exists {
-			errors = append(errors, fmt.Errorf("duplicate primary key '%s' in input records", primaryKeyString))
-			continue
+			return fmt.Errorf("primary key '%s' is nil or empty", t.PrimaryKey)
 		}
 
 		protoRecord := &dbdata.Record{Fields: make(map[string]*structpb.Value)}
 		for key, value := range record {
 			protoValue, err := structpb.NewValue(value)
 			if err != nil {
-				errors = append(errors, fmt.Errorf("invalid value type for field '%s': %v", key, err))
-				continue
+				return fmt.Errorf("invalid value type for field '%s': %v", key, err)
 			}
 			protoRecord.Fields[key] = protoValue
 		}
 
-		protoRecords[primaryKeyString] = protoRecord
-	}
-
-	t.Lock()
-	defer t.Unlock()
-
-	if t.Indexes == nil {
-		t.Indexes = make(map[string][]*dbdata.Record)
-	}
-
-	allRecords, err := t.readRecordsFromFile()
-	if err != nil {
-		return append(errors, err)
-	}
-
-	for primaryKeyString, protoRecord := range protoRecords {
 		if _, exists := allRecords.Records[primaryKeyString]; exists {
-			errors = append(errors, fmt.Errorf("record with primary key '%s' already exists", primaryKeyString))
-			continue
-		}
-
-		for key := range protoRecord.Fields {
-			if _, exists := t.Indexes[key]; !exists {
-				t.Indexes[key] = []*dbdata.Record{}
-			}
-			t.Indexes[key] = append(t.Indexes[key], protoRecord)
+			return fmt.Errorf("record with primary key '%s' already exists", primaryKeyString)
 		}
 
 		allRecords.Records[primaryKeyString] = protoRecord
 		t.Cache[primaryKeyString] = protoRecord
-		t.metrics.IncrementInsertCount()
 	}
 
 	if err := t.writeRecordsToFile(allRecords); err != nil {
-		return append(errors, err)
+		return err
 	}
 
-	return errors
+	return nil
+
 }
 
 // SelectAll is a method of the Table struct that selects all records from the table.
