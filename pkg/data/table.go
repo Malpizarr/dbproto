@@ -763,13 +763,19 @@ func Equal(value1, value2 *structpb.Value) bool {
 func toProtoValue(value interface{}) (*structpb.Value, error) {
 	switch v := value.(type) {
 	case int:
-		return structpb.NewStringValue(strconv.FormatInt(int64(v), 10)), nil
+		return structpb.NewStringValue("num:" + strconv.FormatInt(int64(v), 10)), nil
 	case int32:
-		return structpb.NewStringValue(strconv.FormatInt(int64(v), 10)), nil
+		return structpb.NewStringValue("num:" + strconv.FormatInt(int64(v), 10)), nil
 	case int64:
-		return structpb.NewStringValue(strconv.FormatInt(v, 10)), nil
-	case float32, float64:
-		return structpb.NewNumberValue(value.(float64)), nil
+		return structpb.NewStringValue("num:" + strconv.FormatInt(v, 10)), nil
+	case float32:
+		return structpb.NewNumberValue(float64(v)), nil
+	case float64:
+		return structpb.NewNumberValue(v), nil
+	case string:
+		return structpb.NewStringValue(v), nil
+	case bool:
+		return structpb.NewBoolValue(v), nil
 	default:
 		return structpb.NewValue(value)
 	}
@@ -801,13 +807,19 @@ func fromProtoRecord(protoRecord *dbdata.Record) (Record, error) {
 func fromProtoValue(protoValue *structpb.Value) (interface{}, error) {
 	switch v := protoValue.GetKind().(type) {
 	case *structpb.Value_StringValue:
-		// Attempt to parse the string as an int
-		if intValue, err := strconv.ParseInt(v.StringValue, 10, 64); err == nil {
+		// Check for the special prefix
+		if len(v.StringValue) > 4 && v.StringValue[:4] == "num:" {
+			intValue, err := strconv.ParseInt(v.StringValue[4:], 10, 64)
+			if err != nil {
+				return nil, err
+			}
 			return intValue, nil
 		}
 		return v.StringValue, nil
 	case *structpb.Value_NumberValue:
 		return v.NumberValue, nil
+	case *structpb.Value_BoolValue:
+		return v.BoolValue, nil
 	default:
 		return protoValue.AsInterface(), nil
 	}
