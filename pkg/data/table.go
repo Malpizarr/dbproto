@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"strconv"
 	"sync"
 
 	"github.com/Malpizarr/dbproto/pkg/dbdata"
@@ -150,6 +151,8 @@ func (t *Table) initializeFileIfNotExists() error {
 	return nil
 }
 
+//INSERT
+
 // Insert is a method of the Table struct that inserts a new record into the table.
 // It locks the table for writing, ensuring that no other goroutines can modify the table while the insertion is happening.
 // It first checks if the Indexes map is initialized, and if not, it initializes it.
@@ -227,7 +230,7 @@ func (t *Table) Insert(record Record) error {
 // - records: A slice of maps representing the records to be inserted. The keys are field names and the values are the field values.
 //
 // Returns:
-// - A slice of errors for records that failed to insert. If all records are inserted successfully, the slice is empty.
+// - A slice of errors for records that failed to insert. If all records are inserted successfully, the slice ismpty.
 func (t *Table) InsertMany(records []Record) error {
 	t.Lock()
 	defer t.Unlock()
@@ -243,14 +246,19 @@ func (t *Table) InsertMany(records []Record) error {
 			return fmt.Errorf("primary key '%s' not found in record", t.PrimaryKey)
 		}
 
-		primaryKeyString := fmt.Sprintf("%v", primaryKeyValue)
+		primaryKeyProtoValue, err := toProtoValue(primaryKeyValue)
+		if err != nil {
+			return err
+		}
+		primaryKeyString := primaryKeyProtoValue.GetStringValue()
+
 		if primaryKeyString == "<nil>" || primaryKeyString == "" {
 			return fmt.Errorf("primary key '%s' is nil or empty", t.PrimaryKey)
 		}
 
 		protoRecord := &dbdata.Record{Fields: make(map[string]*structpb.Value)}
 		for key, value := range record {
-			protoValue, err := structpb.NewValue(value)
+			protoValue, err := toProtoValue(value)
 			if err != nil {
 				return fmt.Errorf("invalid value type for field '%s': %v", key, err)
 			}
@@ -270,8 +278,9 @@ func (t *Table) InsertMany(records []Record) error {
 	}
 
 	return nil
-
 }
+
+//SELECT
 
 // SelectAll is a method of the Table struct that selects all records from the table.
 // It locks the table for reading, ensuring that no other goroutines can modify the table while the selection is happening.
@@ -284,54 +293,25 @@ func (t *Table) InsertMany(records []Record) error {
 // - A slice of pointers to dbdata.Record instances representing all records in the table.
 // - If an error occurs, it returns the error and a nil slice.
 // - If the operation is successful, it returns the slice of all records and a nil error.
-func (t *Table) SelectAll() ([]*dbdata.Record, error) {
+func (t *Table) SelectAll() ([]Record, error) {
 	t.RLock()
 	defer t.RUnlock()
 
-	index, exists := t.Indexes[t.PrimaryKey]
-	if !exists {
+	allRecordsProto, err := t.readRecordsFromFile()
+	if err != nil {
+		return nil, err
+	}
 
-		records, err := t.readRecordsFromFile()
+	var allRecords []Record
+	for _, recordProto := range allRecordsProto.GetRecords() {
+		record, err := fromProtoRecord(recordProto)
 		if err != nil {
 			return nil, err
 		}
-		var allRecords []*dbdata.Record
-		for _, record := range records.GetRecords() {
-			allRecords = append(allRecords, record)
-		}
-		t.metrics.IncrementQueryCount()
-		return allRecords, nil
-	}
-
-	var allRecords []*dbdata.Record
-	for _, record := range index {
 		allRecords = append(allRecords, record)
 	}
 	t.metrics.IncrementQueryCount()
 	return allRecords, nil
-}
-
-// Equal checks if two structpb.Value are equal
-func Equal(value1, value2 *structpb.Value) bool {
-	if value1.GetKind() == nil || value2.GetKind() == nil {
-		return false
-	}
-
-	switch value1.GetKind().(type) {
-	case *structpb.Value_NumberValue:
-		return value1.GetNumberValue() == value2.GetNumberValue()
-	case *structpb.Value_StringValue:
-		return value1.GetStringValue() == value2.GetStringValue()
-	case *structpb.Value_BoolValue:
-		return value1.GetBoolValue() == value2.GetBoolValue()
-	case *structpb.Value_StructValue:
-		return false
-	case *structpb.Value_ListValue:
-
-		return false
-	default:
-		return false
-	}
 }
 
 // SelectWithFilter is a method of the Table struct that selects records from the table based on the given filters.
@@ -352,7 +332,7 @@ func Equal(value1, value2 *structpb.Value) bool {
 // - A slice of pointers to dbdata.Record instances representing the records that match the filters.
 // - If an error occurs, it returns the error and a nil slice.
 // - If the operation is successful, it returns the slice of matched records and a nil error.
-func (t *Table) SelectWithFilter(filters map[string]interface{}) ([]*dbdata.Record, error) {
+func (t *Table) SelectWithFilter(filters map[string]interface{}) ([]Record, error) {
 	t.RLock()
 	defer t.RUnlock()
 
@@ -379,7 +359,17 @@ RecordsLoop:
 		matchedRecords = append(matchedRecords, record)
 	}
 
-	return matchedRecords, nil
+	// Convert matchedRecords to []Record
+	recordResults := make([]Record, len(matchedRecords))
+	for i, protoRecord := range matchedRecords {
+		record, err := fromProtoRecord(protoRecord)
+		if err != nil {
+			return nil, err
+		}
+		recordResults[i] = record
+	}
+
+	return recordResults, nil
 }
 
 // Select is a method of the Table struct that selects a record from the table based on the given key.
@@ -397,7 +387,7 @@ RecordsLoop:
 // - If a record with the given key does not exist, it returns an error and a nil record.
 // - If an error occurs while reading the records from the file, it returns the error and a nil record.
 // - If the operation is successful, it returns the record with the given key and a nil error.
-func (t *Table) Select(key interface{}) (*dbdata.Record, error) {
+func (t *Table) Select(key interface{}) (Record, error) {
 	t.RLock()
 	defer t.RUnlock()
 
@@ -405,7 +395,7 @@ func (t *Table) Select(key interface{}) (*dbdata.Record, error) {
 
 	if record, exists := t.Cache[keyStr]; exists {
 		t.metrics.IncrementCacheHits()
-		return record, nil
+		return fromProtoRecord(record)
 	}
 
 	records, err := t.readRecordsFromFile()
@@ -421,8 +411,10 @@ func (t *Table) Select(key interface{}) (*dbdata.Record, error) {
 	t.Cache[keyStr] = record
 	t.metrics.IncrementCacheMisses()
 	t.metrics.IncrementQueryCount()
-	return record, nil
+	return fromProtoRecord(record)
 }
+
+//UPDATE
 
 // Update is a method of the Table struct that updates a record in the table based on the given key.
 // It locks the table for writing, ensuring that no other goroutines can modify the table while the update is happening.
@@ -552,6 +544,8 @@ func (t *Table) UpdateMany(updates map[string]Record) []error {
 	return errors
 }
 
+//DELETE
+
 // Delete is a method of the Table struct that deletes a record from the table based on the given key.
 // It locks the table for writing, ensuring that no other goroutines can modify the table while the deletion is happening.
 // It first reads all existing records from the file where the table data is stored.
@@ -631,7 +625,13 @@ func (t *Table) DeleteMany(keys []interface{}) []error {
 	var errors []error
 
 	for _, key := range keys {
-		keyStr := fmt.Sprintf("%v", key)
+		keyProtoValue, err := toProtoValue(key)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+		keyStr := keyProtoValue.GetStringValue()
+
 		record, exists := allRecords.Records[keyStr]
 		if !exists {
 			errors = append(errors, fmt.Errorf("record with key %s not found", keyStr))
@@ -663,6 +663,8 @@ func (t *Table) DeleteMany(keys []interface{}) []error {
 
 	return errors
 }
+
+//READER AND WRITER
 
 // readRecordsFromFile reads the records from the file
 func (t *Table) readRecordsFromFile() (*dbdata.Records, error) {
@@ -725,4 +727,88 @@ func (t *Table) writeRecordsToFile(records *dbdata.Records) error {
 	t.Records = records.Records
 
 	return nil
+}
+
+//Utils
+
+// Equal checks if two structpb.Value are equal
+func Equal(value1, value2 *structpb.Value) bool {
+	if value1.GetKind() == nil || value2.GetKind() == nil {
+		return false
+	}
+
+	switch value1.GetKind().(type) {
+	case *structpb.Value_NumberValue:
+		return value1.GetNumberValue() == value2.GetNumberValue()
+	case *structpb.Value_StringValue:
+		return value1.GetStringValue() == value2.GetStringValue()
+	case *structpb.Value_BoolValue:
+		return value1.GetBoolValue() == value2.GetBoolValue()
+	case *structpb.Value_StructValue:
+		return false
+	case *structpb.Value_ListValue:
+
+		return false
+	default:
+		return false
+	}
+}
+
+// toProtoValue converts a given value to a protobuf value.
+// It supports conversion for int, int32, int64, float32, float64 and other types that can be directly converted to a protobuf value.
+// For int, int32 and int64, it converts the value to a string and then to a protobuf string value.
+// For float32 and float64, it converts the value to a protobuf number value.
+// For other types, it directly converts the value to a protobuf value.
+// It returns the converted protobuf value and an error if the conversion fails.
+func toProtoValue(value interface{}) (*structpb.Value, error) {
+	switch v := value.(type) {
+	case int:
+		return structpb.NewStringValue(strconv.FormatInt(int64(v), 10)), nil
+	case int32:
+		return structpb.NewStringValue(strconv.FormatInt(int64(v), 10)), nil
+	case int64:
+		return structpb.NewStringValue(strconv.FormatInt(v, 10)), nil
+	case float32, float64:
+		return structpb.NewNumberValue(value.(float64)), nil
+	default:
+		return structpb.NewValue(value)
+	}
+}
+
+// fromProtoRecord converts a protobuf record to a map record.
+// It iterates over the fields in the protobuf record, converts each protobuf value to a Go value using fromProtoValue function,
+// and adds the converted value to the map record.
+// It returns the converted map record and an error if the conversion of any value fails.
+func fromProtoRecord(protoRecord *dbdata.Record) (Record, error) {
+	record := make(Record)
+	for key, valueProto := range protoRecord.Fields {
+		value, err := fromProtoValue(valueProto)
+		if err != nil {
+			return nil, err
+		}
+		record[key] = value
+	}
+	return record, nil
+}
+
+// fromProtoValue converts a protobuf value to a Go value.
+// It supports conversion for protobuf string value and protobuf number value.
+// For protobuf string value, it attempts to parse the string as an int and returns the int value if the parsing is successful.
+// If the parsing fails, it returns the string value.
+// For protobuf number value, it returns the number value.
+// For other types, it directly returns the value as interface{}.
+// It returns the converted Go value and an error if the conversion fails.
+func fromProtoValue(protoValue *structpb.Value) (interface{}, error) {
+	switch v := protoValue.GetKind().(type) {
+	case *structpb.Value_StringValue:
+		// Attempt to parse the string as an int
+		if intValue, err := strconv.ParseInt(v.StringValue, 10, 64); err == nil {
+			return intValue, nil
+		}
+		return v.StringValue, nil
+	case *structpb.Value_NumberValue:
+		return v.NumberValue, nil
+	default:
+		return protoValue.AsInterface(), nil
+	}
 }

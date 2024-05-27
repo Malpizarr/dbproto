@@ -17,13 +17,13 @@ type Query struct {
 	Offset  int                    // Offset is the Number of records to skip (for pagination)
 }
 
-// ExecutionPlan represents the execution plan of a query.
+// ExecutionPlan represents the execution plan for a database query.
 type ExecutionPlan struct {
-	IndexToUse string
-	Filters    map[string]interface{}
-	SortBy     string
-	Limit      int
-	Offset     int
+	IndexToUse string                 // IndexToUse specifies the index to be used for the query.
+	Filters    map[string]interface{} // Filters contains the filters to be applied to the query.
+	SortBy     string                 // SortBy specifies the field to sort the query results by.
+	Limit      int                    // Limit specifies the maximum number of results to be returned.
+	Offset     int                    // Offset specifies the number of results to skip before returning.
 }
 
 // selectBestIndex selects the best index for a given query.
@@ -58,7 +58,7 @@ func (t *Table) generateExecutionPlan(query Query) ExecutionPlan {
 }
 
 // executePlan executes the execution plan and returns the resulting records.
-func (t *Table) executePlan(plan ExecutionPlan) ([]*dbdata.Record, error) {
+func (t *Table) executePlan(plan ExecutionPlan) ([]Record, error) {
 	var results []*dbdata.Record
 
 	// If an index is used, search within the indexed records
@@ -91,7 +91,7 @@ func (t *Table) executePlan(plan ExecutionPlan) ([]*dbdata.Record, error) {
 	// Apply offset to the results
 	if plan.Offset > 0 {
 		if plan.Offset >= len(results) {
-			return []*dbdata.Record{}, nil
+			return []Record{}, nil
 		}
 		results = results[plan.Offset:]
 	}
@@ -101,7 +101,17 @@ func (t *Table) executePlan(plan ExecutionPlan) ([]*dbdata.Record, error) {
 		results = results[:plan.Limit]
 	}
 
-	return results, nil
+	// Convert results to []Record
+	recordResults := make([]Record, len(results))
+	for i, protoRecord := range results {
+		record, err := fromProtoRecord(protoRecord)
+		if err != nil {
+			return nil, err
+		}
+		recordResults[i] = record
+	}
+
+	return recordResults, nil
 }
 
 // match checks if a record matches the given filters.
@@ -134,9 +144,9 @@ func match(record *dbdata.Record, filters map[string]interface{}) bool {
 // - query: A Query object representing the query to be performed. The Query object includes filters to select specific records, a field to sort the records by, and a limit and offset for the results.
 //
 // Returns:
-// - A slice of pointers to dbdata.Record objects, representing the records that match the query. If no records match the query, it returns an empty slice.
+// - A slice of Record objects, representing the records that match the query. If no records match the query, it returns an empty slice.
 // - An error, if any error occurs during the query operation. If the operation is successful, the error is nil.
-func (t *Table) Query(query Query) ([]*dbdata.Record, error) {
+func (t *Table) Query(query Query) ([]Record, error) {
 	plan := t.generateExecutionPlan(query)
 	return t.executePlan(plan)
 }
