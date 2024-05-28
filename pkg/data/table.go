@@ -172,46 +172,53 @@ func (t *Table) initializeFileIfNotExists() error {
 // - If an error occurs, it returns the error.
 
 func (t *Table) Insert(record Record) error {
-	primaryKeyValue, ok := record[t.PrimaryKey]
-	if !ok {
-		return fmt.Errorf("primary key '%s' not found in record", t.PrimaryKey)
-	}
-
-	primaryKeyString := fmt.Sprintf("%v", primaryKeyValue)
-	if primaryKeyString == "<nil>" || primaryKeyString == "" {
-		return fmt.Errorf("primary key '%s' is nil or empty", t.PrimaryKey)
-	}
-
-	protoRecord := &dbdata.Record{Fields: make(map[string]*structpb.Value)}
-	for key, value := range record {
-		protoValue, err := structpb.NewValue(value)
-		if err != nil {
-			return fmt.Errorf("invalid value type for field '%s': %v", key, err)
-		}
-		protoRecord.Fields[key] = protoValue
-	}
-
 	t.Lock()
 	defer t.Unlock()
-
-	if t.Indexes == nil {
-		t.Indexes = make(map[string][]*dbdata.Record)
-	}
 
 	allRecords, err := t.readRecordsFromFile()
 	if err != nil {
 		return err
 	}
 
-	if _, exists := allRecords.Records[primaryKeyString]; exists {
-		return fmt.Errorf("record with primary key '%s' already exists", primaryKeyString)
+	primaryKeyValue, ok := record[t.PrimaryKey]
+	if !ok {
+		return fmt.Errorf("primary key '%s' not found in record", t.PrimaryKey)
 	}
 
-	for key := range protoRecord.Fields {
-		if _, exists := t.Indexes[key]; !exists {
-			t.Indexes[key] = []*dbdata.Record{}
+	// Validate the primary key value before calling toProtoValue
+	if strValue, ok := primaryKeyValue.(string); ok {
+		if _, err := strconv.ParseInt(strValue, 10, 64); err == nil {
+			primaryKeyValue = "str:" + strValue
 		}
-		t.Indexes[key] = append(t.Indexes[key], protoRecord)
+	}
+
+	primaryKeyProtoValue, err := toProtoValue(primaryKeyValue)
+	if err != nil {
+		return err
+	}
+	primaryKeyString := primaryKeyProtoValue.GetStringValue()
+
+	if primaryKeyString == "<nil>" || primaryKeyString == "" {
+		return fmt.Errorf("primary key '%s' is nil or empty", t.PrimaryKey)
+	}
+
+	protoRecord := &dbdata.Record{Fields: make(map[string]*structpb.Value)}
+	for key, value := range record {
+		// Validate each value before calling toProtoValue
+		if strValue, ok := value.(string); ok {
+			if _, err := strconv.ParseInt(strValue, 10, 64); err == nil {
+				value = "str:" + strValue
+			}
+		}
+		protoValue, err := toProtoValue(value)
+		if err != nil {
+			return fmt.Errorf("invalid value type for field '%s': %v", key, err)
+		}
+		protoRecord.Fields[key] = protoValue
+	}
+
+	if _, exists := allRecords.Records[primaryKeyString]; exists {
+		return fmt.Errorf("record with primary key '%s' already exists", primaryKeyString)
 	}
 
 	allRecords.Records[primaryKeyString] = protoRecord
