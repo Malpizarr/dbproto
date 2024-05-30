@@ -111,11 +111,7 @@ func mergeRecords(rec1, rec2 *dbdata.Record) map[string]interface{} {
 				return intValue
 			}
 			if len(x.StringValue) > 4 && x.StringValue[:4] == "str:" {
-				strValue, err := strconv.ParseInt(x.StringValue[4:], 10, 64)
-				if err != nil {
-					return x.StringValue // fallback to the original string if parsing fails
-				}
-				return strValue
+				return x.StringValue[4:]
 			}
 			return x.StringValue
 		case *structpb.Value_NumberValue:
