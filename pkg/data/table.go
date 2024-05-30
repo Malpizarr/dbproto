@@ -822,6 +822,9 @@ func fromProtoValue(protoValue *structpb.Value) (interface{}, error) {
 			}
 			return intValue, nil
 		}
+		if len(v.StringValue) > 4 && v.StringValue[:4] == "str:" {
+			return v.StringValue[4:], nil
+		}
 		return v.StringValue, nil
 	case *structpb.Value_NumberValue:
 		return v.NumberValue, nil
