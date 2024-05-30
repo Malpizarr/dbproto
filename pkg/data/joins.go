@@ -2,6 +2,7 @@ package data
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/Malpizarr/dbproto/pkg/dbdata"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -101,6 +102,14 @@ func mergeRecords(rec1, rec2 *dbdata.Record) map[string]interface{} {
 	extractValue := func(v *structpb.Value) interface{} {
 		switch x := v.Kind.(type) {
 		case *structpb.Value_StringValue:
+			// Check for the special prefix
+			if len(x.StringValue) > 4 && x.StringValue[:4] == "num:" {
+				intValue, err := strconv.ParseInt(x.StringValue[4:], 10, 64)
+				if err != nil {
+					return x.StringValue // fallback to the original string if parsing fails
+				}
+				return intValue
+			}
 			return x.StringValue
 		case *structpb.Value_NumberValue:
 			return x.NumberValue
